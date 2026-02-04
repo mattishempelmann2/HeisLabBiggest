@@ -24,7 +24,7 @@ func main() {
 	go bcast.Transmitter(20014, StatusTx) //idk hvilken port som er korrekt
 	go bcast.Receiver(20014, StatusRx)
 
-	sendTicker := time.NewTicker(10 * time.Second) // ticker = går av periodically forever
+	sendTicker := time.NewTicker(1 * time.Second) // ticker = går av periodically forever
 
 	numFloors := 4
 
