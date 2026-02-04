@@ -80,12 +80,14 @@ func (e *Elevator) SetStopLamp(value bool) {
 	write([4]byte{5, toByte(value), 0, 0})
 }
 
-func (e *Elevator) UpdateOrderList(Orders <-chan ButtonEvent) {
-	for req := range Orders {
-		e.UpdateElevatorOrder(req)
-		fmt.Printf("executing order: floor: %d button : %d", req.Floor, req.Button)
-		//orderexecution
-	}
+func (e *Elevator) UpdateOrderList(Order ButtonEvent) {
+
+	e.UpdateElevatorOrder(Order)
+	//for req := range Orders {
+	//	e.UpdateElevatorOrder(req)
+	//	fmt.Printf("executing order: floor: %d button : %d", req.Floor, req.Button)
+	//orderexecution
+	//	}
 }
 
 func (e *Elevator) UpdateElevatorOrder(btn ButtonEvent) {
@@ -212,7 +214,12 @@ func (e *Elevator) ExecuteOrder() {
 
 		case (e.Retning == 0) && (e.PrevRetning == 0) && e.Floor != topFloor: // Har odre over, var på tur ned stopped i en etasje, ikke bunn etasje-> kjør nedover
 			e.SetMotorDirection(1)
+		
+		case (e.Retning == 0) && (e.Floor == 0):
+			e.SetMotorDirection(1)
 
+		default:
+			break
 		}
 
 	case e.HasOrderBelow():
@@ -231,6 +238,12 @@ func (e *Elevator) ExecuteOrder() {
 
 		case (e.Retning == 0) && (e.PrevRetning == 0) && e.Floor != 0: // Har odre over, var på tur ned stopped i en etasje, ikke bunn etasje-> kjør nedover
 			e.SetMotorDirection(-1)
+		
+		case (e.Retning == 0) && (e.Floor == topFloor):
+			e.SetMotorDirection(-1)
+
+		default:
+			break
 		}
 
 	default:

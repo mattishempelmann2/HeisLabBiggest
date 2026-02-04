@@ -31,7 +31,7 @@ func main() {
 	drv_floors := make(chan int)
 	drv_obstr := make(chan bool)
 	drv_stop := make(chan bool)
-	OrderChan := make(chan elevio.ButtonEvent)
+	//OrderChan := make(chan elevio.ButtonEvent)
 	BtnPress := make(chan bool)
 	//Timerdone := make(chan bool)
 
@@ -49,8 +49,8 @@ func main() {
 		case a := <-drv_buttons:
 			//fmt.Printf("%+v\n", a)
 			cab1.SetButtonLamp(a.Button, a.Floor, true)
-			go cab1.UpdateOrderList(OrderChan)
-			OrderChan <- a
+			cab1.UpdateOrderList(a)
+			//OrderChan <- a
 			BtnPress <- true
 
 		case a := <-drv_floors:
