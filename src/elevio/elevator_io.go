@@ -19,16 +19,16 @@ type MotorDirection int
 
 const (
 	MD_Up   MotorDirection = 1
-	MD_Down                = -1
-	MD_Stop                = 0
+	MD_Down MotorDirection = -1
+	MD_Stop MotorDirection = 0
 )
 
 type ButtonType int
 
 const (
 	BT_HallUp   ButtonType = 0
-	BT_HallDown            = 1
-	BT_Cab                 = 2
+	BT_HallDown ButtonType = 1
+	BT_Cab      ButtonType = 2
 )
 
 type ButtonEvent struct {
@@ -164,7 +164,20 @@ func (e *Elevator) DriveTo(floor int) { // fjern
 			e.SetMotorDirection(1)
 
 		}
+
 	}
+}
+
+func (e *Elevator) CabInit() {
+	for GetFloor() != 0 {
+		e.SetMotorDirection(MD_Down)
+		time.Sleep(_pollRate)
+	}
+	e.SetMotorDirection(0)
+	e.Floor = 0
+	e.PrevRetning = 0
+	e.Retning = 0
+	e.SetDoorOpenLamp(false)
 }
 
 func (e *Elevator) DoorTimer(SendDone chan<- bool) {
@@ -214,7 +227,7 @@ func (e *Elevator) ExecuteOrder() {
 
 		case (e.Retning == 0) && (e.PrevRetning == 0) && e.Floor != topFloor: // Har odre over, var på tur ned stopped i en etasje, ikke bunn etasje-> kjør nedover
 			e.SetMotorDirection(1)
-		
+
 		case (e.Retning == 0) && (e.Floor == 0):
 			e.SetMotorDirection(1)
 
@@ -238,7 +251,7 @@ func (e *Elevator) ExecuteOrder() {
 
 		case (e.Retning == 0) && (e.PrevRetning == 0) && e.Floor != 0: // Har odre over, var på tur ned stopped i en etasje, ikke bunn etasje-> kjør nedover
 			e.SetMotorDirection(-1)
-		
+
 		case (e.Retning == 0) && (e.Floor == topFloor):
 			e.SetMotorDirection(-1)
 
