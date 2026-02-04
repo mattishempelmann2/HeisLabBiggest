@@ -8,6 +8,7 @@ import (
 )
 
 const _pollRate = 20 * time.Millisecond
+const numButtons = 3
 
 var _initialized bool = false
 var _numFloors int = 4
@@ -107,7 +108,7 @@ func (e *Elevator) UpdateRetning(Retning MotorDirection) {
 
 func (e *Elevator) HasOrderAbove() bool {
 	for i := e.Floor + 1; i < _numFloors; i++ {
-		for j := 0; j < 3; j++ {
+		for j := 0; j < numButtons; j++ {
 			if e.OrderList[i][j] == true {
 				return true
 			}
@@ -119,7 +120,7 @@ func (e *Elevator) HasOrderAbove() bool {
 
 func (e *Elevator) HasOrderBelow() bool {
 	for i := e.Floor - 1; i >= 0; i-- {
-		for j := 0; j < 3; j++ {
+		for j := 0; j < numButtons; j++ {
 			if e.OrderList[i][j] == true {
 				return true
 			}
@@ -130,7 +131,7 @@ func (e *Elevator) HasOrderBelow() bool {
 }
 
 func (e *Elevator) FloorOrder() bool {
-	for i := 0; i < 3; i++ {
+	for i := 0; i < _numFloors; i++ {
 		if e.OrderList[e.Floor][i] == true {
 			return true
 		}
@@ -139,8 +140,8 @@ func (e *Elevator) FloorOrder() bool {
 }
 
 func (e *Elevator) ActiveOrders() bool {
-	for i := 0; i < 4; i++ {
-		for j := 0; j < 3; j++ {
+	for i := 0; i < _numFloors; i++ {
+		for j := 0; j < numButtons; j++ {
 			if e.OrderList[i][j] == true {
 				return true
 			}
@@ -150,7 +151,7 @@ func (e *Elevator) ActiveOrders() bool {
 }
 
 func (e *Elevator) ClearOrderFloor() {
-	for i := 0; i < 3; i++ {
+	for i := 0; i < numButtons; i++ {
 		e.OrderList[e.Floor][i] = false
 		e.SetButtonLamp(ButtonType(i), e.Floor, false)
 
