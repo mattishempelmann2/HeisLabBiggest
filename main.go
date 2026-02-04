@@ -92,7 +92,7 @@ func main() {
 			if msg.SenderID == localID {
 				continue
 			}
-			fmt.Printf("Received message from %s at flor %d \n", msg.SenderID, msg.CurrentFloor)
+			fmt.Printf("Received message from %s at floor %d \n", msg.SenderID, msg.CurrentFloor)
 
 		case a := <-drv_obstr:
 			fmt.Printf("%+v\n", a)
