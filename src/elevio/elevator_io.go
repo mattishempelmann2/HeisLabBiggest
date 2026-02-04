@@ -176,11 +176,11 @@ func (e *Elevator) ExecuteOrder() {
 	switch {
 	case e.FloorOrder():
 		switch {
-		case e.OrderList[e.Floor][2] == true:
+		case e.OrderList[e.Floor][2] == true: // knapp cab
 			e.StoppFloor()
-		case (e.Retning == 1) && (e.OrderList[e.Floor][0] == true):
+		case (e.Retning == 1) && (e.OrderList[e.Floor][0] == true): //på tur oppover og knapp hall opp
 			e.StoppFloor()
-		case e.Retning == -1 && (e.OrderList[e.Floor][1] == true):
+		case e.Retning == -1 && (e.OrderList[e.Floor][1] == true): // tur nedover knapp hall ned
 			e.StoppFloor()
 		default:
 			break // mulig redundant
@@ -233,7 +233,7 @@ func (e *Elevator) PollFloorSensor(receiver chan<- int, btnPress <-chan bool) {
 			buttonPressed = false
 		}
 
-		if (v != prev && v != -1) || (v != -1 && buttonPressed) || (e.ActiveOrders() && v != -1){
+		if (v != prev && v != -1) || (v != -1 && buttonPressed) || (e.ActiveOrders() && v != -1) {
 			receiver <- v
 		}
 		prev = v
