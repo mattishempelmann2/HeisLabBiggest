@@ -11,6 +11,7 @@ const _pollRate = 20 * time.Millisecond
 
 var _initialized bool = false
 var _numFloors int = 4
+var topFloor int = _numFloors - 1
 var _mtx sync.Mutex
 var _conn net.Conn
 
@@ -36,10 +37,11 @@ type ButtonEvent struct {
 }
 
 type Elevator struct {
-	OrderList [4][3]bool
-	Floor     int
-	Retning   MotorDirection
-	DoorOpen  bool
+	OrderList   [4][3]bool
+	Floor       int
+	Retning     MotorDirection
+	PrevRetning MotorDirection
+	DoorOpen    bool
 }
 
 func Init(addr string, numFloors int) {
@@ -97,6 +99,7 @@ func (e *Elevator) UpdateFloor(Floor int) {
 }
 
 func (e *Elevator) UpdateRetning(Retning MotorDirection) {
+	e.PrevRetning = e.Retning
 	e.Retning = Retning
 }
 
@@ -162,13 +165,18 @@ func (e *Elevator) DriveTo(floor int) { // fjern
 	}
 }
 
+func (e *Elevator) DoorTimer(SendDone chan<- bool) {
+	time.Sleep(3 * time.Second)
+	SendDone <- true
+}
+
 func (e *Elevator) StoppFloor() {
 	e.SetMotorDirection(0)
 	e.DoorOpen = true
 	e.SetDoorOpenLamp(true)
-	time.Sleep(3 * time.Second)
-	e.DoorOpen = false
-	e.SetDoorOpenLamp(false)
+	//time.Sleep(3 * time.Second)
+	//e.DoorOpen = false
+	//e.SetDoorOpenLamp(false)
 	e.ClearOrderFloor()
 }
 
@@ -182,18 +190,48 @@ func (e *Elevator) ExecuteOrder() {
 			e.StoppFloor()
 		case e.Retning == -1 && (e.OrderList[e.Floor][1] == true): // tur nedover knapp hall ned
 			e.StoppFloor()
+		case e.Retning == 0 && ((e.OrderList[e.Floor][1] == true) || (e.OrderList[e.Floor][0] == true)): // tur nedover knapp hall ned
+			e.StoppFloor()
 		default:
 			break // mulig redundant
 		}
 
 	case e.HasOrderAbove():
-		e.SetMotorDirection(1) // kjør til etasje det er ordre til
+		switch {
+		case e.Retning == 1: // Har odre over er på tur opp -> fortsett opp
+			e.SetMotorDirection(1)
 
-		//do something
+		case e.Retning == -1: // HAr odre oveer er på tur ned -> fortsett ned
+			e.SetMotorDirection(-1)
+
+		case (e.Retning == 0) && (e.PrevRetning == 1) && e.Floor != topFloor: // Har ordre over, stoppet i etasje, var på tur opp og er ikke i toppetasjen -> kjør opp
+			e.SetMotorDirection(1)
+
+		case (e.Retning == 0) && (e.PrevRetning == -1) && e.Floor != 0: // Har odre over, var på tur ned stopped i en etasje, ikke bunn etasje-> kjør nedover
+			e.SetMotorDirection(-1)
+
+		case (e.Retning == 0) && (e.PrevRetning == 0) && e.Floor != topFloor: // Har odre over, var på tur ned stopped i en etasje, ikke bunn etasje-> kjør nedover
+			e.SetMotorDirection(1)
+
+		}
 
 	case e.HasOrderBelow():
-		e.SetMotorDirection(-1)
-		//do something
+		switch {
+		case e.Retning == 1: // Har odre under er på tur opp -> fortsett opp
+			e.SetMotorDirection(1)
+
+		case e.Retning == -1: // HAr odre oveer er på tur ned -> fortsett ned
+			e.SetMotorDirection(-1)
+
+		case (e.Retning == 0) && (e.PrevRetning == 1) && e.Floor != topFloor: // Har ordre over, stoppet i etasje, var på tur opp og er ikke i toppetasjen -> kjør opp
+			e.SetMotorDirection(1)
+
+		case (e.Retning == 0) && (e.PrevRetning == -1) && e.Floor != 0: // Har odre over, var på tur ned stopped i en etasje, ikke bunn etasje-> kjør nedover
+			e.SetMotorDirection(-1)
+
+		case (e.Retning == 0) && (e.PrevRetning == 0) && e.Floor != 0: // Har odre over, var på tur ned stopped i en etasje, ikke bunn etasje-> kjør nedover
+			e.SetMotorDirection(-1)
+		}
 
 	default:
 		e.SetMotorDirection(0)

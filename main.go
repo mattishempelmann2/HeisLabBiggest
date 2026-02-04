@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"heis/src/elevio"
 	"heis/src/network/bcast"
+	"time"
 )
 
 func main() {
@@ -19,6 +20,9 @@ func main() {
 	elevio.Init("localhost:15657", numFloors)
 
 	cab1 := &elevio.Elevator{}
+	cab1.PrevRetning = 0
+	cab1.Retning = 0
+	cab1.SetDoorOpenLamp(false) //fix senere, lag init funk som kjører heis ned til 1 etasje, 
 
 	var d elevio.MotorDirection = elevio.MD_Up
 	//cab1.SetMotorDirection(d)
@@ -29,16 +33,21 @@ func main() {
 	drv_stop := make(chan bool)
 	OrderChan := make(chan elevio.ButtonEvent)
 	BtnPress := make(chan bool)
+	//Timerdone := make(chan bool)
 
 	go elevio.PollButtons(drv_buttons)
 	go cab1.PollFloorSensor(drv_floors, BtnPress)
 	go elevio.PollObstructionSwitch(drv_obstr)
 	go elevio.PollStopButton(drv_stop)
+	
+	doorTimer := time.NewTimer(3 * time.Second)
+	doorTimer.Stop()
+
 
 	for {
 		select {
 		case a := <-drv_buttons:
-			fmt.Printf("%+v\n", a)
+			//fmt.Printf("%+v\n", a)
 			cab1.SetButtonLamp(a.Button, a.Floor, true)
 			go cab1.UpdateOrderList(OrderChan)
 			OrderChan <- a
@@ -47,7 +56,22 @@ func main() {
 		case a := <-drv_floors:
 			cab1.SetFloorIndicator(a)
 			cab1.UpdateFloor(a)
+			if(!cab1.DoorOpen){
+				cab1.ExecuteOrder()
+
+				if cab1.DoorOpen{
+					fmt.Printf("Door opening")
+					doorTimer.Reset(3 * time.Second)
+				}
+			}
+
+		case <- doorTimer.C:
+			fmt.Printf("Door closing")
+			cab1.DoorOpen = false
+			cab1.SetDoorOpenLamp(false)
 			cab1.ExecuteOrder()
+
+
 
 		case a := <-drv_obstr:
 			fmt.Printf("%+v\n", a)
@@ -67,3 +91,5 @@ func main() {
 		}
 	}
 }
+
+
