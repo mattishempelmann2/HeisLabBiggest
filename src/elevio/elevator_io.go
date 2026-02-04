@@ -139,7 +139,7 @@ func (e *Elevator) FloorOrder() bool {
 }
 
 func (e *Elevator) ActiveOrders() bool {
-	for i := 0; i < 4; i++ {
+	for i := 0; i < topFloor; i++ {
 		for j := 0; j < 3; j++ {
 			if e.OrderList[i][j] == true {
 				return true
@@ -150,7 +150,7 @@ func (e *Elevator) ActiveOrders() bool {
 }
 
 func (e *Elevator) ClearOrderFloor() {
-	for i := 0; i < 3; i++ {
+	for i := 0; i < topFloor; i++ {
 		e.OrderList[e.Floor][i] = false
 		e.SetButtonLamp(ButtonType(i), e.Floor, false)
 
