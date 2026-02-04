@@ -50,18 +50,17 @@ func main() {
 	go elevio.PollStopButton(drv_stop)
 
 	doorTimer := time.NewTimer(3 * time.Second) //må startes/resetes manuelt
-	doorTimer.Stop()
+	doorTimer.Stop()                            // Timer starter når definert, stoppe så den ikke fucker opp states
 
 	for {
 		select {
-		case a := <-drv_buttons:
+		case a := <-drv_buttons: //knappetrykk
 			//fmt.Printf("%+v\n", a)
 			cab1.SetButtonLamp(a.Button, a.Floor, true)
 			cab1.UpdateOrderList(a)
-			//OrderChan <- a
 			BtnPress <- true
 
-		case a := <-drv_floors:
+		case a := <-drv_floors: //etasjeupdate
 			cab1.SetFloorIndicator(a)
 			cab1.UpdateFloor(a)
 			if !cab1.DoorOpen {
@@ -73,13 +72,13 @@ func main() {
 				}
 			}
 
-		case <-doorTimer.C:
+		case <-doorTimer.C: //timer etter dør åpen
 			fmt.Printf("Door closing \n")
 			cab1.DoorOpen = false
 			cab1.SetDoorOpenLamp(false)
 			cab1.ExecuteOrder()
 
-		case <-sendTicker.C:
+		case <-sendTicker.C: //Periodisk statusupdate
 			msg := ElevatorStatus{
 				SenderID:     localID,
 				CurrentFloor: cab1.Floor,
@@ -88,13 +87,13 @@ func main() {
 			}
 			StatusTx <- msg
 
-		case msg := <-StatusRx:
+		case msg := <-StatusRx: //Mottar status update
 			if msg.SenderID == localID {
 				continue
 			}
 			fmt.Printf("Received message from %s at floor %d \n", msg.SenderID, msg.CurrentFloor)
 
-		case a := <-drv_obstr:
+		case a := <-drv_obstr: //Obstruksjonsbryter
 			fmt.Printf("%+v\n", a)
 			if a {
 				cab1.SetMotorDirection(elevio.MD_Stop)
@@ -102,7 +101,7 @@ func main() {
 				cab1.SetMotorDirection(d)
 			}
 
-		case a := <-drv_stop:
+		case a := <-drv_stop: //stop bryter
 			fmt.Printf("%+v\n", a)
 			for f := 0; f < numFloors; f++ {
 				for b := elevio.ButtonType(0); b < 3; b++ {
