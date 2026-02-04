@@ -9,11 +9,22 @@ import (
 
 func main() {
 
-	IntTx := make(chan int)
-	IntRx := make(chan int)
+	type ElevatorStatus struct { //det som sendes, health checks
+		SenderID     string
+		CurrentFloor int
+		Direction    int
+		OrderList    [4][3]bool
+	}
 
-	go bcast.Transmitter(20014, IntTx)
-	go bcast.Receiver(20014, IntRx)
+	localID := "15657" // bruke noe
+
+	StatusTx := make(chan ElevatorStatus) //channel med status
+	StatusRx := make(chan ElevatorStatus)
+
+	go bcast.Transmitter(20014, StatusTx) //idk hvilken port som er korrekt
+	go bcast.Receiver(20014, StatusRx)
+
+	sendTicker := time.NewTicker(10 * time.Second) // ticker = går av periodically forever
 
 	numFloors := 4
 
@@ -38,7 +49,7 @@ func main() {
 	go elevio.PollObstructionSwitch(drv_obstr)
 	go elevio.PollStopButton(drv_stop)
 
-	doorTimer := time.NewTimer(3 * time.Second)
+	doorTimer := time.NewTimer(3 * time.Second) //må startes/resetes manuelt
 	doorTimer.Stop()
 
 	for {
@@ -67,6 +78,21 @@ func main() {
 			cab1.DoorOpen = false
 			cab1.SetDoorOpenLamp(false)
 			cab1.ExecuteOrder()
+
+		case <-sendTicker.C:
+			msg := ElevatorStatus{
+				SenderID:     localID,
+				CurrentFloor: cab1.Floor,
+				Direction:    int(cab1.Retning),
+				OrderList:    cab1.OrderList,
+			}
+			StatusTx <- msg
+
+		case msg := <-StatusRx:
+			if msg.SenderID == localID {
+				continue
+			}
+			fmt.Printf("Received message from %s at flor %d \n", msg.SenderID, msg.CurrentFloor)
 
 		case a := <-drv_obstr:
 			fmt.Printf("%+v\n", a)

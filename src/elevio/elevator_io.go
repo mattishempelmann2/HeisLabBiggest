@@ -131,7 +131,7 @@ func (e *Elevator) HasOrderBelow() bool {
 }
 
 func (e *Elevator) FloorOrder() bool {
-	for i := 0; i < _numFloors; i++ {
+	for i := 0; i < numButtons; i++ {
 		if e.OrderList[e.Floor][i] == true {
 			return true
 		}
