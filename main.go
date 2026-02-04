@@ -2,10 +2,21 @@ package main
 
 import (
 	elevio "heis/src"
+	"heis/src/network/bcast"
 	"fmt"
 )
 
+
+
 func main() {
+
+	IntTx := make(chan int)
+	IntRx := make(chan int)
+
+	go bcast.Transmitter(20014, IntTx)
+	go bcast.Receiver(20014, IntRx)
+
+
 
 	numFloors := 4
 
