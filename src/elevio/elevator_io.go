@@ -9,7 +9,6 @@ import (
 
 const _pollRate = 20 * time.Millisecond
 const numButtons = 3
-const etasje = 4 //midlertidig for å teste problem med at ordreliste blir større
 
 var _initialized bool = false
 var _numFloors int = 4
@@ -39,12 +38,12 @@ type ButtonEvent struct {
 }
 
 type Elevator struct {
-	OrderList   [etasje][numButtons]OrderStatus
+	OrderList   [4][numButtons]OrderStatus
 	Floor       int
 	Retning     MotorDirection
 	PrevRetning MotorDirection
 	DoorOpen    bool
-	AliveNodes  []int
+	AliveNodes  map[int]bool
 }
 
 type ElevatorStatus struct { //det som sendes, health checks
@@ -189,6 +188,7 @@ func (e *Elevator) CabInit() {
 	e.PrevRetning = 0
 	e.Retning = 0
 	e.SetDoorOpenLamp(false)
+	e.AliveNodes = make(map[int]bool)
 }
 
 func (e *Elevator) DoorTimer(SendDone chan<- bool) {

@@ -111,6 +111,8 @@ func main() {
 			cab1.SteinSaksPapir(msg) // hvis ikke egen eller gammel melding, gjør steinsakspapir algebra
 
 			lastSeenMap[msg.SenderID] = msg.MsgID // oppdater sist sett.
+			cab1.AliveNodes[msg.SenderID] = true  // denne noden lever, sett som true
+
 			//fmt.Printf("Received message from %d at floor %d \n", msg.SenderID, msg.CurrentFloor)
 			if msg.OrderList != lastSeenOrder { // kun print ved endring, slipper spam
 				PrintOrderMatrix(msg)
