@@ -7,14 +7,30 @@ import (
 	"time"
 )
 
-func main() {
+type ElevatorStatus struct { //det som sendes, health checks
+	SenderID     string
+	CurrentFloor int
+	Direction    int
+	OrderList    [4][3]bool
+}
 
-	type ElevatorStatus struct { //det som sendes, health checks
-		SenderID     string
-		CurrentFloor int
-		Direction    int
-		OrderList    [4][3]bool
+func PrintOrderMatrix(e ElevatorStatus) {
+	fmt.Printf("   %s  %s  %s\n", "Up", "Dn", "Cab") // Header (Optional)
+	for f := 0; f < 4; f++ {
+		fmt.Printf("F%d ", f) // Row label
+		for b := 0; b < 3; b++ {
+			// Print 1 for true, . for false (cleaner visual)
+			if e.OrderList[f][b] {
+				fmt.Printf("[%s] ", "X")
+			} else {
+				fmt.Printf("[%s] ", " ")
+			}
+		}
+		fmt.Printf("\n")
 	}
+}
+
+func main() {
 
 	localID := "15657" // bruke noe
 
@@ -91,7 +107,8 @@ func main() {
 			if msg.SenderID == localID {
 				continue
 			}
-			fmt.Printf("Received message from %s at floor %d \n", msg.SenderID, msg.CurrentFloor)
+			//fmt.Printf("Received message from %s at floor %d \n", msg.SenderID, msg.CurrentFloor)
+			PrintOrderMatrix(msg)
 
 		case a := <-drv_obstr: //Obstruksjonsbryter
 			fmt.Printf("%+v\n", a)

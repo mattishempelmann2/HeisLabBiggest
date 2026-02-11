@@ -206,8 +206,13 @@ func (e *Elevator) ExecuteOrder() {
 			e.StoppFloor()
 		case e.Retning == -1 && (e.OrderList[e.Floor][1] == true): // tur nedover knapp hall ned
 			e.StoppFloor()
-		case e.Retning == 0 && ((e.OrderList[e.Floor][1] == true) || (e.OrderList[e.Floor][0] == true)): // tur nedover knapp hall ned
+		case e.Retning == 0 && ((e.OrderList[e.Floor][1] == true) || (e.OrderList[e.Floor][0] == true)): // står i ro, hall up/down åpen dør
 			e.StoppFloor()
+		case (e.Retning == -1) && (e.OrderList[e.Floor][0] == true) && (!e.HasOrderBelow()):
+			e.StoppFloor()
+		case (e.Retning == 1) && (e.OrderList[e.Floor][1] == true) && (!e.HasOrderAbove()):
+			e.StoppFloor()
+
 		default:
 			break // mulig redundant
 		}
