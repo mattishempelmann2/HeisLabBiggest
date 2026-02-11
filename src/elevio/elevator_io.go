@@ -228,10 +228,13 @@ func (e *Elevator) ExecuteOrder() {
 		case (e.Retning == 0) && (e.PrevRetning == 1) && e.Floor != topFloor: // Har ordre over, stoppet i etasje, var på tur opp og er ikke i toppetasjen -> kjør opp
 			e.SetMotorDirection(1)
 
-		case (e.Retning == 0) && (e.PrevRetning == -1) && e.Floor != 0: // Har odre over, var på tur ned stopped i en etasje, ikke bunn etasje-> kjør nedover
+		case (e.Retning == 0) && (e.PrevRetning == -1) && (!e.HasOrderBelow()):
+			e.SetMotorDirection(1)
+
+		case (e.Retning == 0) && (e.PrevRetning == -1) && e.Floor != 0: // Har ordre over, var på tur ned stopped i en etasje, ikke bunn etasje-> kjør nedover
 			e.SetMotorDirection(-1)
 
-		case (e.Retning == 0) && (e.PrevRetning == 0) && e.Floor != topFloor: // Har odre over, var på tur ned stopped i en etasje, ikke bunn etasje-> kjør nedover
+		case (e.Retning == 0) && (e.PrevRetning != -1) && e.Floor != topFloor: // Har ordre over, stoppet i etasje, var ikke på tur og er ikke i toppetasjen -> kjør opp
 			e.SetMotorDirection(1)
 
 		case (e.Retning == 0) && (e.Floor == 0):
@@ -249,16 +252,16 @@ func (e *Elevator) ExecuteOrder() {
 		case e.Retning == -1: // HAr odre oveer er på tur ned -> fortsett ned
 			e.SetMotorDirection(-1)
 
-		case (e.Retning == 0) && (e.PrevRetning == 1) && e.Floor != topFloor: // Har ordre over, stoppet i etasje, var på tur opp og er ikke i toppetasjen -> kjør opp
+		case (e.Retning == 0) && (e.PrevRetning == 1) && (!e.HasOrderAbove()): // står i ro, var på tur opp, har ikke odre over, men har under -> kjør ned
+			e.SetMotorDirection(-1)
+
+		case (e.Retning == 0) && (e.PrevRetning == 1) && e.Floor != topFloor: // Har ordre under, stoppet i etasje, var på tur opp og er ikke i toppetasjen -> kjør opp
 			e.SetMotorDirection(1)
 
-		case (e.Retning == 0) && (e.PrevRetning == -1) && e.Floor != 0: // Har odre over, var på tur ned stopped i en etasje, ikke bunn etasje-> kjør nedover
+		case (e.Retning == 0) && (e.PrevRetning != 1) && e.Floor != 0: // Har ordre under, var ikke på tur opp, stoppet i en etasje, ikke bunn etasje-> kjør nedover
 			e.SetMotorDirection(-1)
 
-		case (e.Retning == 0) && (e.PrevRetning == 0) && e.Floor != 0: // Har odre over, var på tur ned stopped i en etasje, ikke bunn etasje-> kjør nedover
-			e.SetMotorDirection(-1)
-
-		case (e.Retning == 0) && (e.Floor == topFloor):
+		case (e.Retning == 0) && (e.Floor == topFloor): // mulig redundant
 			e.SetMotorDirection(-1)
 
 		default:
