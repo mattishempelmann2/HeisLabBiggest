@@ -27,7 +27,8 @@ func PrintOrderMatrix(e elevio.ElevatorStatus) {
 
 func main() {
 	counter := 0 //
-	lastSeenID := 0
+	lastSeenMap := make(map[int]int)
+	var lastSeenOrder [4][3]elevio.OrderStatus
 
 	localID := 15657 // bruke noe
 
@@ -37,16 +38,16 @@ func main() {
 	go bcast.Transmitter(20014, StatusTx) //idk hvilken port som er korrekt
 	go bcast.Receiver(20014, StatusRx)
 
-	sendTicker := time.NewTicker(500 * time.Millisecond) // ticker = går av periodically forever, hvor ofte sender vi status
+	sendTicker := time.NewTicker(50 * time.Millisecond) // ticker = går av periodically forever, hvor ofte sender vi status
 
 	const numFloors = 4
-	address := fmt.Sprintf("localhost:%d", localID)
+	address := fmt.Sprintf("localhost:%d", localID) //slipper å manuelt skrive inn argument til init
 	elevio.Init(address, numFloors)
 
 	cab1 := &elevio.Elevator{}
 	cab1.CabInit() //Init func
 
-	var d elevio.MotorDirection = elevio.MD_Up
+	var d elevio.MotorDirection = elevio.MD_Up // fjern etter hvert
 	//cab1.SetMotorDirection(d)
 
 	drv_buttons := make(chan elevio.ButtonEvent)
@@ -103,14 +104,19 @@ func main() {
 			counter++       // dårlig quickfix, gjør om til medlemsvariabel senere
 
 		case msg := <-StatusRx: //Mottar status update
-			if (msg.SenderID == localID) || msg.MsgID < lastSeenID { //sjekk om dette er gammel melding
+			if (msg.SenderID == localID) || msg.MsgID < lastSeenMap[msg.SenderID] {
 				continue
 			}
+
 			cab1.SteinSaksPapir(msg) // hvis ikke egen eller gammel melding, gjør steinsakspapir algebra
 
-			lastSeenID = msg.MsgID // oppdater sist sett.
+			lastSeenMap[msg.SenderID] = msg.MsgID // oppdater sist sett.
 			//fmt.Printf("Received message from %d at floor %d \n", msg.SenderID, msg.CurrentFloor)
-			PrintOrderMatrix(msg)
+			if msg.OrderList != lastSeenOrder { // kun print ved endring, slipper spam
+				PrintOrderMatrix(msg)
+				fmt.Printf("msgID: %d \n", msg.MsgID)
+				lastSeenOrder = msg.OrderList
+			}
 
 		case a := <-drv_obstr: //Obstruksjonsbryter
 			fmt.Printf("%+v\n", a)
