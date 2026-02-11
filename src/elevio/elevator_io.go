@@ -38,12 +38,21 @@ type ButtonEvent struct {
 }
 
 type Elevator struct {
-	OrderList   [4][3]bool
+	OrderList   [4][3]OrderStatus
 	Floor       int
 	Retning     MotorDirection
 	PrevRetning MotorDirection
 	DoorOpen    bool
+	AliveNodes []int
 }
+
+type OrderStatus int
+
+const (
+	Order_Inactive = 0
+	Order_Pending = 1
+	Order_Active = 2
+)
 
 func Init(addr string, numFloors int) {
 	if _initialized {
@@ -81,18 +90,10 @@ func (e *Elevator) SetStopLamp(value bool) {
 	write([4]byte{5, toByte(value), 0, 0})
 }
 
-func (e *Elevator) UpdateOrderList(Order ButtonEvent) {
 
-	e.UpdateElevatorOrder(Order)
-	//for req := range Orders {
-	//	e.UpdateElevatorOrder(req)
-	//	fmt.Printf("executing order: floor: %d button : %d", req.Floor, req.Button)
-	//orderexecution
-	//	}
-}
 
 func (e *Elevator) UpdateElevatorOrder(btn ButtonEvent) {
-	e.OrderList[btn.Floor][btn.Button] = true
+	e.OrderList[btn.Floor][btn.Button] = Order_Pending
 }
 
 func (e *Elevator) UpdateFloor(Floor int) {
@@ -109,7 +110,7 @@ func (e *Elevator) UpdateRetning(Retning MotorDirection) {
 func (e *Elevator) HasOrderAbove() bool {
 	for i := e.Floor + 1; i < _numFloors; i++ {
 		for j := 0; j < numButtons; j++ {
-			if e.OrderList[i][j] == true {
+			if e.OrderList[i][j] == Order_Active {
 				return true
 			}
 		}
@@ -121,7 +122,7 @@ func (e *Elevator) HasOrderAbove() bool {
 func (e *Elevator) HasOrderBelow() bool {
 	for i := e.Floor - 1; i >= 0; i-- {
 		for j := 0; j < numButtons; j++ {
-			if e.OrderList[i][j] == true {
+			if e.OrderList[i][j] == Order_Active {
 				return true
 			}
 		}
@@ -132,17 +133,17 @@ func (e *Elevator) HasOrderBelow() bool {
 
 func (e *Elevator) FloorOrder() bool {
 	for i := 0; i < numButtons; i++ {
-		if e.OrderList[e.Floor][i] == true {
+		if e.OrderList[e.Floor][i] == Order_Active {
 			return true
 		}
 	}
 	return false
 }
 
-func (e *Elevator) ActiveOrders() bool {
+func (e *Elevator) ActiveOrders() bool { //needed for PollFloorSensor
 	for i := 0; i < _numFloors; i++ {
 		for j := 0; j < numButtons; j++ {
-			if e.OrderList[i][j] == true {
+			if e.OrderList[i][j] == Order_Active {
 				return true
 			}
 		}
@@ -152,8 +153,10 @@ func (e *Elevator) ActiveOrders() bool {
 
 func (e *Elevator) ClearOrderFloor() {
 	for i := 0; i < numButtons; i++ {
-		e.OrderList[e.Floor][i] = false
-		e.SetButtonLamp(ButtonType(i), e.Floor, false)
+		if e.OrderList[e.Floor][i] == Order_Active{
+			e.OrderList[e.Floor][i] = Order_Inactive
+			e.SetButtonLamp(ButtonType(i), e.Floor, false)
+		}
 
 	}
 }
@@ -200,17 +203,17 @@ func (e *Elevator) ExecuteOrder() {
 	switch {
 	case e.FloorOrder():
 		switch {
-		case e.OrderList[e.Floor][2] == true: // knapp cab
+		case e.OrderList[e.Floor][2] == Order_Active: // knapp cab
 			e.StoppFloor()
-		case (e.Retning == 1) && (e.OrderList[e.Floor][0] == true): //på tur oppover og knapp hall opp
+		case (e.Retning == 1) && (e.OrderList[e.Floor][0] == Order_Active): //på tur oppover og knapp hall opp
 			e.StoppFloor()
-		case e.Retning == -1 && (e.OrderList[e.Floor][1] == true): // tur nedover knapp hall ned
+		case e.Retning == -1 && (e.OrderList[e.Floor][1] == Order_Active): // tur nedover knapp hall ned
 			e.StoppFloor()
-		case e.Retning == 0 && ((e.OrderList[e.Floor][1] == true) || (e.OrderList[e.Floor][0] == true)): // står i ro, hall up/down åpen dør
+		case e.Retning == 0 && ((e.OrderList[e.Floor][1] == Order_Active) || (e.OrderList[e.Floor][0] == Order_Active)): // står i ro, hall up/down åpen dør
 			e.StoppFloor()
-		case (e.Retning == -1) && (e.OrderList[e.Floor][0] == true) && (!e.HasOrderBelow()):
+		case (e.Retning == -1) && (e.OrderList[e.Floor][0] == Order_Active) && (!e.HasOrderBelow()):
 			e.StoppFloor()
-		case (e.Retning == 1) && (e.OrderList[e.Floor][1] == true) && (!e.HasOrderAbove()):
+		case (e.Retning == 1) && (e.OrderList[e.Floor][1] == Order_Active) && (!e.HasOrderAbove()):
 			e.StoppFloor()
 
 		default:

@@ -8,10 +8,10 @@ import (
 )
 
 type ElevatorStatus struct { //det som sendes, health checks
-	SenderID     string
+	SenderID     int
 	CurrentFloor int
 	Direction    int
-	OrderList    [4][3]bool
+	OrderList    [4][3]elevio.OrderStatus
 }
 
 func PrintOrderMatrix(e ElevatorStatus) {
@@ -20,8 +20,11 @@ func PrintOrderMatrix(e ElevatorStatus) {
 		fmt.Printf("F%d ", f) // Row label
 		for b := 0; b < 3; b++ {
 			// Print 1 for true, . for false (cleaner visual)
-			if e.OrderList[f][b] {
+			if e.OrderList[f][b] == elevio.Order_Active {
 				fmt.Printf("[%s] ", "X")
+			}
+			if e.OrderList[f][b] == elevio.Order_Pending {
+				fmt.Printf("[%s] ", "P")
 			} else {
 				fmt.Printf("[%s] ", " ")
 			}
@@ -32,7 +35,7 @@ func PrintOrderMatrix(e ElevatorStatus) {
 
 func main() {
 
-	localID := "15657" // bruke noe
+	localID := 15657 // bruke noe
 
 	StatusTx := make(chan ElevatorStatus) //channel med status
 	StatusRx := make(chan ElevatorStatus)
@@ -43,8 +46,8 @@ func main() {
 	sendTicker := time.NewTicker(1 * time.Second) // ticker = går av periodically forever
 
 	numFloors := 4
-
-	elevio.Init("localhost:15657", numFloors)
+	address := fmt.Sprintf("localhost:%d", localID)
+	elevio.Init(address, numFloors)
 
 	cab1 := &elevio.Elevator{}
 	cab1.CabInit() //Init func
@@ -73,7 +76,7 @@ func main() {
 		case a := <-drv_buttons: //knappetrykk
 			//fmt.Printf("%+v\n", a)
 			cab1.SetButtonLamp(a.Button, a.Floor, true)
-			cab1.UpdateOrderList(a)
+			cab1.UpdateElevatorOrder(a)
 			BtnPress <- true
 
 		case a := <-drv_floors: //etasjeupdate
@@ -107,7 +110,7 @@ func main() {
 			if msg.SenderID == localID {
 				continue
 			}
-			//fmt.Printf("Received message from %s at floor %d \n", msg.SenderID, msg.CurrentFloor)
+			//fmt.Printf("Received message from %d at floor %d \n", msg.SenderID, msg.CurrentFloor)
 			PrintOrderMatrix(msg)
 
 		case a := <-drv_obstr: //Obstruksjonsbryter
