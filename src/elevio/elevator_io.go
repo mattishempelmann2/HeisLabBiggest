@@ -9,6 +9,7 @@ import (
 
 const _pollRate = 20 * time.Millisecond
 const numButtons = 3
+const etasje = 4 //midlertidig for å teste problem med at ordreliste blir større
 
 var _initialized bool = false
 var _numFloors int = 4
@@ -38,20 +39,28 @@ type ButtonEvent struct {
 }
 
 type Elevator struct {
-	OrderList   [4][3]OrderStatus
+	OrderList   [etasje][numButtons]OrderStatus
 	Floor       int
 	Retning     MotorDirection
 	PrevRetning MotorDirection
 	DoorOpen    bool
-	AliveNodes []int
+	AliveNodes  []int
+}
+
+type ElevatorStatus struct { //det som sendes, health checks
+	SenderID     int
+	CurrentFloor int
+	Direction    int
+	OrderList    [4][3]OrderStatus
+	MsgID        int //For å holde styr på rekkefølge, forkaste gamle meldinger
 }
 
 type OrderStatus int
 
 const (
 	Order_Inactive = 0
-	Order_Pending = 1
-	Order_Active = 2
+	Order_Pending  = 1
+	Order_Active   = 2
 )
 
 func Init(addr string, numFloors int) {
@@ -89,8 +98,6 @@ func (e *Elevator) SetDoorOpenLamp(value bool) {
 func (e *Elevator) SetStopLamp(value bool) {
 	write([4]byte{5, toByte(value), 0, 0})
 }
-
-
 
 func (e *Elevator) UpdateElevatorOrder(btn ButtonEvent) {
 	e.OrderList[btn.Floor][btn.Button] = Order_Pending
@@ -153,7 +160,7 @@ func (e *Elevator) ActiveOrders() bool { //needed for PollFloorSensor
 
 func (e *Elevator) ClearOrderFloor() {
 	for i := 0; i < numButtons; i++ {
-		if e.OrderList[e.Floor][i] == Order_Active{
+		if e.OrderList[e.Floor][i] == Order_Active {
 			e.OrderList[e.Floor][i] = Order_Inactive
 			e.SetButtonLamp(ButtonType(i), e.Floor, false)
 		}
@@ -275,6 +282,25 @@ func (e *Elevator) ExecuteOrder() {
 		e.SetMotorDirection(0)
 	}
 
+}
+
+func (e *Elevator) SteinSaksPapir(Node ElevatorStatus) { //Utfører steinsakspapir algebra
+	for i := 0; i < _numFloors; i++ {
+		for j := 0; j < numButtons; j++ {
+			switch {
+			case (e.OrderList[i][j] == Order_Inactive) && (Node.OrderList[i][j] == Order_Pending): // var inaktiv, får pending fra annen node = pending
+				e.OrderList[i][j] = Order_Pending
+			case (e.OrderList[i][j] == Order_Pending) && ((Node.OrderList[i][j] == Order_Pending) || (Node.OrderList[i][j] == Order_Active)): // Ordre er pending, får enten pending eller aktiv fra annen node -> aktiv
+				e.OrderList[i][j] = Order_Active
+				e.SetButtonLamp(ButtonType(j), i, true) // noe av det dummeste jeg har sett, caste i som er en int til buttontype som er en int
+			case (e.OrderList[i][j] == Order_Active) && (Node.OrderList[i][j] == Order_Inactive): // Ordre er aktiv, blir utført annen node->satt inaktiv der = inaktiv her
+				e.OrderList[i][j] = Order_Inactive
+				e.SetButtonLamp(ButtonType(j), i, false)
+			default: // legge til noe her? Usikker hva default case burde være
+				continue
+			}
+		}
+	}
 }
 
 func PollButtons(receiver chan<- ButtonEvent) {

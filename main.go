@@ -7,25 +7,17 @@ import (
 	"time"
 )
 
-type ElevatorStatus struct { //det som sendes, health checks
-	SenderID     int
-	CurrentFloor int
-	Direction    int
-	OrderList    [4][3]elevio.OrderStatus
-}
-
-func PrintOrderMatrix(e ElevatorStatus) {
+func PrintOrderMatrix(e elevio.ElevatorStatus) {
 	fmt.Printf("   %s  %s  %s\n", "Up", "Dn", "Cab") // Header (Optional)
 	for f := 0; f < 4; f++ {
-		fmt.Printf("F%d ", f) // Row label
+		fmt.Printf("F%d ", f)
 		for b := 0; b < 3; b++ {
-			// Print 1 for true, . for false (cleaner visual)
-			if e.OrderList[f][b] == elevio.Order_Active {
+			switch {
+			case e.OrderList[f][b] == elevio.Order_Active:
 				fmt.Printf("[%s] ", "X")
-			}
-			if e.OrderList[f][b] == elevio.Order_Pending {
+			case e.OrderList[f][b] == elevio.Order_Pending:
 				fmt.Printf("[%s] ", "P")
-			} else {
+			default:
 				fmt.Printf("[%s] ", " ")
 			}
 		}
@@ -34,18 +26,20 @@ func PrintOrderMatrix(e ElevatorStatus) {
 }
 
 func main() {
+	counter := 0 //
+	lastSeenID := 0
 
 	localID := 15657 // bruke noe
 
-	StatusTx := make(chan ElevatorStatus) //channel med status
-	StatusRx := make(chan ElevatorStatus)
+	StatusTx := make(chan elevio.ElevatorStatus) //channel med status
+	StatusRx := make(chan elevio.ElevatorStatus)
 
 	go bcast.Transmitter(20014, StatusTx) //idk hvilken port som er korrekt
 	go bcast.Receiver(20014, StatusRx)
 
-	sendTicker := time.NewTicker(1 * time.Second) // ticker = går av periodically forever
+	sendTicker := time.NewTicker(500 * time.Millisecond) // ticker = går av periodically forever, hvor ofte sender vi status
 
-	numFloors := 4
+	const numFloors = 4
 	address := fmt.Sprintf("localhost:%d", localID)
 	elevio.Init(address, numFloors)
 
@@ -75,7 +69,7 @@ func main() {
 		select {
 		case a := <-drv_buttons: //knappetrykk
 			//fmt.Printf("%+v\n", a)
-			cab1.SetButtonLamp(a.Button, a.Floor, true)
+			//cab1.SetButtonLamp(a.Button, a.Floor, true)  //må gjøres noe med lys settes nå på i SteinSaksPapir
 			cab1.UpdateElevatorOrder(a)
 			BtnPress <- true
 
@@ -83,7 +77,7 @@ func main() {
 			cab1.SetFloorIndicator(a)
 			cab1.UpdateFloor(a)
 			if !cab1.DoorOpen {
-				cab1.ExecuteOrder()
+				cab1.ExecuteOrder() // denne åpner dør
 
 				if cab1.DoorOpen {
 					fmt.Printf("Door opening \n")
@@ -98,18 +92,23 @@ func main() {
 			cab1.ExecuteOrder()
 
 		case <-sendTicker.C: //Periodisk statusupdate
-			msg := ElevatorStatus{
+			msg := elevio.ElevatorStatus{ //Lager statusmelding
 				SenderID:     localID,
 				CurrentFloor: cab1.Floor,
 				Direction:    int(cab1.Retning),
 				OrderList:    cab1.OrderList,
+				MsgID:        counter, //bruke counter som MsgID
 			}
-			StatusTx <- msg
+			StatusTx <- msg //sende
+			counter++       // dårlig quickfix, gjør om til medlemsvariabel senere
 
 		case msg := <-StatusRx: //Mottar status update
-			if msg.SenderID == localID {
+			if (msg.SenderID == localID) || msg.MsgID < lastSeenID { //sjekk om dette er gammel melding
 				continue
 			}
+			cab1.SteinSaksPapir(msg) // hvis ikke egen eller gammel melding, gjør steinsakspapir algebra
+
+			lastSeenID = msg.MsgID // oppdater sist sett.
 			//fmt.Printf("Received message from %d at floor %d \n", msg.SenderID, msg.CurrentFloor)
 			PrintOrderMatrix(msg)
 
