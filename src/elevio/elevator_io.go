@@ -57,8 +57,8 @@ type ElevatorStatus struct { //det som sendes, health checks
 type OrderStatus int
 
 const (
-	Order_Inactive = 0
-	Order_Pending  = 1
+	Order_Inactive = 0 // bruker int, kan eventuelt bruke veldig forskjellieg verdier for å gjøre robust mot "cosmic ray bitflip"
+	Order_Pending  = 1 // UDP har vist checksum så mulig irellevant, kanskje bruke 0 til unknown siden det er default value for int?
 	Order_Active   = 2
 )
 
@@ -206,7 +206,7 @@ func (e *Elevator) StoppFloor() {
 	e.ClearOrderFloor()
 }
 
-func (e *Elevator) ExecuteOrder() {
+func (e *Elevator) ExecuteOrder() { // må kanskje forkaste hele denne til fordel for en GoToFloor funksjon, siden cost funksjon assigner ordre til heis
 	switch {
 	case e.FloorOrder():
 		switch {
