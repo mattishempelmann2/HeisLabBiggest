@@ -38,7 +38,7 @@ func main() {
 	go bcast.Transmitter(20014, StatusTx) //idk hvilken port som er korrekt
 	go bcast.Receiver(20014, StatusRx)
 
-	sendTicker := time.NewTicker(50 * time.Millisecond) // ticker = går av periodically forever, hvor ofte sender vi status
+	sendTicker := time.NewTicker(10 * time.Millisecond) // ticker = går av periodically forever, hvor ofte sender vi status
 
 	const numFloors = 4
 	address := fmt.Sprintf("localhost:%d", localID) //slipper å manuelt skrive inn argument til init
@@ -98,7 +98,8 @@ func main() {
 				CurrentFloor: cab1.Floor,
 				Direction:    int(cab1.Retning),
 				OrderList:    cab1.OrderList,
-				MsgID:        counter, //bruke counter som MsgID
+				MsgID:        counter,
+				DoorOpen:     cab1.DoorOpen, //bruke counter som MsgID
 			}
 			StatusTx <- msg //sende
 			counter++       // dårlig quickfix, gjør om til medlemsvariabel senere
@@ -106,6 +107,12 @@ func main() {
 		case msg := <-StatusRx: //Mottar status update
 			if (msg.SenderID == localID) || msg.MsgID < lastSeenMap[msg.SenderID] {
 				continue
+			}
+
+			if msg.CurrentFloor != -1 { // kanskje ikke lurt
+				if msg.DoorOpen {
+					cab1.ClearOrderHallBtn()
+				}
 			}
 
 			cab1.SteinSaksPapir(msg) // hvis ikke egen eller gammel melding, gjør steinsakspapir algebra

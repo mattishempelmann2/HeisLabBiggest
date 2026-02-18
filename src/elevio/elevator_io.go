@@ -52,6 +52,7 @@ type ElevatorStatus struct { //det som sendes, health checks
 	Direction    int
 	OrderList    [4][3]OrderStatus
 	MsgID        int //For å holde styr på rekkefølge, forkaste gamle meldinger
+	DoorOpen     bool
 }
 
 type OrderStatus int
@@ -157,8 +158,18 @@ func (e *Elevator) ActiveOrders() bool { //needed for PollFloorSensor
 	return false
 }
 
-func (e *Elevator) ClearOrderFloor() {
+func (e *Elevator) ClearOrderFloor() { // mulig ikke lur måte å gjøre det på
 	for i := 0; i < numButtons; i++ {
+		if e.OrderList[e.Floor][i] == Order_Active {
+			e.OrderList[e.Floor][i] = Order_Inactive
+			e.SetButtonLamp(ButtonType(i), e.Floor, false)
+		}
+
+	}
+}
+
+func (e *Elevator) ClearOrderHallBtn() { // mulig ikke lur måte å gjøre det på
+	for i := 0; i < numButtons-1; i++ {
 		if e.OrderList[e.Floor][i] == Order_Active {
 			e.OrderList[e.Floor][i] = Order_Inactive
 			e.SetButtonLamp(ButtonType(i), e.Floor, false)
