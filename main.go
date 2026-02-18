@@ -26,7 +26,7 @@ func PrintOrderMatrix(e elevio.ElevatorStatus) {
 }
 
 func main() {
-	lastSeenMap := make(map[string]int)
+	lastSeenMapMsgID := make(map[string]int)
 	lastSeenOrder := make(map[string][4][3]elevio.OrderStatus) // hjelpevariabel for print funksjon
 
 	localID := 15657 // bruke noe
@@ -100,15 +100,15 @@ func main() {
 			cab1.MsgCount++
 
 		case msg := <-StatusRx: //Mottar status update
-			if (msg.SenderID == address) || msg.MsgID < lastSeenMap[msg.SenderID] {
+			if (msg.SenderID == address) || msg.MsgID < lastSeenMapMsgID[msg.SenderID] {
 				continue
 			}
 
 			cab1.CabBackupFunc(msg)
 			cab1.SteinSaksPapir(msg) // hvis ikke egen eller gammel melding, gjør steinsakspapir algebra
 
-			lastSeenMap[msg.SenderID] = msg.MsgID // oppdater sist sett.
-			cab1.AliveNodes[msg.SenderID] = true  // denne noden lever, sett som true
+			lastSeenMapMsgID[msg.SenderID] = msg.MsgID // oppdater sist sett.
+			cab1.AliveNodes[msg.SenderID] = true       // denne noden lever, sett som true
 
 			//fmt.Printf("Received message from %d at floor %d \n", msg.SenderID, msg.CurrentFloor)
 			if msg.OrderList != lastSeenOrder[msg.SenderID] { // kun print ved endring, slipper spam
