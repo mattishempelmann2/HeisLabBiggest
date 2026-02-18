@@ -26,9 +26,8 @@ func PrintOrderMatrix(e elevio.ElevatorStatus) {
 }
 
 func main() {
-	counter := 0 //
 	lastSeenMap := make(map[string]int)
-	var lastSeenOrder [4][3]elevio.OrderStatus
+	lastSeenOrder := make(map[string][4][3]elevio.OrderStatus) // hjelpevariabel for print funksjon
 
 	localID := 15657 // bruke noe
 
@@ -48,15 +47,12 @@ func main() {
 	cab1.CabInit(address) //Init func
 
 	var d elevio.MotorDirection = elevio.MD_Up // fjern etter hvert
-	//cab1.SetMotorDirection(d)
 
 	drv_buttons := make(chan elevio.ButtonEvent)
 	drv_floors := make(chan int)
 	drv_obstr := make(chan bool)
 	drv_stop := make(chan bool)
-	//OrderChan := make(chan elevio.ButtonEvent)
 	BtnPress := make(chan bool)
-	//Timerdone := make(chan bool)
 
 	go elevio.PollButtons(drv_buttons)
 	go cab1.PollFloorSensor(drv_floors, BtnPress)
@@ -69,8 +65,6 @@ func main() {
 	for {
 		select {
 		case a := <-drv_buttons: //knappetrykk
-			//fmt.Printf("%+v\n", a)
-			//cab1.SetButtonLamp(a.Button, a.Floor, true)  //må gjøres noe med lys settes nå på i SteinSaksPapir
 			cab1.UpdateElevatorOrder(a)
 			BtnPress <- true
 
@@ -99,22 +93,17 @@ func main() {
 				Direction:    int(cab1.Retning),
 				OrderList:    cab1.OrderList,
 				CabBackupMap: cab1.CabBackupMap,
-				MsgID:        counter,
+				MsgID:        cab1.MsgCount,
 				DoorOpen:     cab1.DoorOpen, //bruke counter som MsgID
 			}
 			StatusTx <- msg //sende
-			counter++       // dårlig quickfix, gjør om til medlemsvariabel senere
+			cab1.MsgCount++
 
 		case msg := <-StatusRx: //Mottar status update
 			if (msg.SenderID == address) || msg.MsgID < lastSeenMap[msg.SenderID] {
 				continue
 			}
 
-			if msg.CurrentFloor != -1 { // kanskje ikke lurt, redundant
-				if msg.DoorOpen {
-					cab1.ClearOrderHallBtn()
-				}
-			}
 			cab1.CabBackupFunc(msg)
 			cab1.SteinSaksPapir(msg) // hvis ikke egen eller gammel melding, gjør steinsakspapir algebra
 
@@ -122,10 +111,10 @@ func main() {
 			cab1.AliveNodes[msg.SenderID] = true  // denne noden lever, sett som true
 
 			//fmt.Printf("Received message from %d at floor %d \n", msg.SenderID, msg.CurrentFloor)
-			if msg.OrderList != lastSeenOrder { // kun print ved endring, slipper spam
+			if msg.OrderList != lastSeenOrder[msg.SenderID] { // kun print ved endring, slipper spam
 				PrintOrderMatrix(msg)
 				fmt.Printf("msgID: %d \n", msg.MsgID)
-				lastSeenOrder = msg.OrderList
+				lastSeenOrder[msg.SenderID] = msg.OrderList
 			}
 
 		case a := <-drv_obstr: //Obstruksjonsbryter

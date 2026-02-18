@@ -61,6 +61,7 @@ type Elevator struct {
 	DoorOpen     bool
 	AliveNodes   map[string]bool
 	ID           string
+	MsgCount     int
 }
 
 type ElevatorStatus struct { //det som sendes, health checks
@@ -205,6 +206,7 @@ func (e *Elevator) CabInit(ID string) {
 	e.AliveNodes = make(map[string]bool)
 	e.CabBackupMap = make(map[string][4]OrderStatus)
 	e.ID = ID
+	e.MsgCount = 0
 }
 
 func (e *Elevator) DoorTimer(SendDone chan<- bool) {
