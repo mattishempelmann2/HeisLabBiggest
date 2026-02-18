@@ -11,15 +11,23 @@ func PrintOrderMatrix(e elevio.ElevatorStatus) {
 	fmt.Printf("   %s  %s  %s\n", "Up", "Dn", "Cab") // Header (Optional)
 	for f := 0; f < 4; f++ {
 		fmt.Printf("F%d ", f)
-		for b := 0; b < 3; b++ {
+		for b := 0; b < 2; b++ {
 			switch {
-			case e.OrderList[f][b] == elevio.Order_Active:
+			case e.OrderListHall[f][b] == elevio.Order_Active:
 				fmt.Printf("[%s] ", "X")
-			case e.OrderList[f][b] == elevio.Order_Pending:
+			case e.OrderListHall[f][b] == elevio.Order_Pending:
 				fmt.Printf("[%s] ", "P")
 			default:
 				fmt.Printf("[%s] ", " ")
 			}
+		}
+		switch {
+		case e.OrderListCab[f] == elevio.Order_Active:
+			fmt.Printf("[%s] ", "X")
+		case e.OrderListCab[f] == elevio.Order_Pending:
+			fmt.Printf("[%s] ", "P")
+		default:
+			fmt.Printf("[%s] ", " ")
 		}
 		fmt.Printf("\n")
 	}
@@ -27,7 +35,8 @@ func PrintOrderMatrix(e elevio.ElevatorStatus) {
 
 func main() {
 	lastSeenMapMsgID := make(map[string]int)
-	lastSeenOrder := make(map[string][4][3]elevio.OrderStatus) // hjelpevariabel for print funksjon
+	lastSeenOrderHall := make(map[string][4][2]elevio.OrderStatus) // hjelpevariabel for print funksjon
+	lastSeenOrderCab := make(map[string][4]elevio.OrderStatus)     //
 
 	localID := 15657 // bruke noe
 
@@ -88,13 +97,14 @@ func main() {
 
 		case <-sendTicker.C: //Periodisk statusupdate
 			msg := elevio.ElevatorStatus{ //Lager statusmelding
-				SenderID:     address,
-				CurrentFloor: cab1.Floor,
-				Direction:    int(cab1.Retning),
-				OrderList:    cab1.OrderList,
-				CabBackupMap: cab1.CabBackupMap,
-				MsgID:        cab1.MsgCount,
-				DoorOpen:     cab1.DoorOpen, //bruke counter som MsgID
+				SenderID:      address,
+				CurrentFloor:  cab1.Floor,
+				Direction:     int(cab1.Retning),
+				OrderListHall: cab1.OrderListHall,
+				OrderListCab:  cab1.OrderListCab,
+				CabBackupMap:  cab1.CabBackupMap,
+				MsgID:         cab1.MsgCount,
+				DoorOpen:      cab1.DoorOpen, //bruke counter som MsgID
 			}
 			StatusTx <- msg //sende
 			cab1.MsgCount++
@@ -111,10 +121,11 @@ func main() {
 			cab1.AliveNodes[msg.SenderID] = true       // denne noden lever, sett som true
 
 			//fmt.Printf("Received message from %d at floor %d \n", msg.SenderID, msg.CurrentFloor)
-			if msg.OrderList != lastSeenOrder[msg.SenderID] { // kun print ved endring, slipper spam
+			if (msg.OrderListHall != lastSeenOrderHall[msg.SenderID]) || (msg.OrderListCab != lastSeenOrderCab[msg.SenderID]) { // kun print ved endring, slipper spam
 				PrintOrderMatrix(msg)
 				fmt.Printf("msgID: %d \n", msg.MsgID)
-				lastSeenOrder[msg.SenderID] = msg.OrderList
+				lastSeenOrderHall[msg.SenderID] = msg.OrderListHall
+				lastSeenOrderCab[msg.SenderID] = msg.OrderListCab
 			}
 
 		case a := <-drv_obstr: //Obstruksjonsbryter

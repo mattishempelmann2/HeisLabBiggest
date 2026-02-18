@@ -53,25 +53,27 @@ type ButtonEvent struct {
 }
 
 type Elevator struct {
-	OrderList    [4][numButtons]OrderStatus
-	CabBackupMap map[string][4]OrderStatus
-	Floor        int
-	Retning      MotorDirection
-	PrevRetning  MotorDirection
-	DoorOpen     bool
-	AliveNodes   map[string]bool
-	ID           string
-	MsgCount     int
+	OrderListHall [4][2]OrderStatus
+	OrderListCab  [4]OrderStatus
+	CabBackupMap  map[string][4]OrderStatus
+	Floor         int
+	Retning       MotorDirection
+	PrevRetning   MotorDirection
+	DoorOpen      bool
+	AliveNodes    map[string]bool
+	ID            string
+	MsgCount      int
 }
 
 type ElevatorStatus struct { //det som sendes, health checks
-	SenderID     string
-	CurrentFloor int
-	Direction    int
-	OrderList    [4][3]OrderStatus
-	CabBackupMap map[string][4]OrderStatus
-	MsgID        int //For å holde styr på rekkefølge, forkaste gamle meldinger
-	DoorOpen     bool
+	SenderID      string
+	CurrentFloor  int
+	Direction     int
+	OrderListHall [4][2]OrderStatus
+	OrderListCab  [4]OrderStatus
+	CabBackupMap  map[string][4]OrderStatus
+	MsgID         int //For å holde styr på rekkefølge, forkaste gamle meldinger
+	DoorOpen      bool
 }
 
 type OrderStatus int
@@ -104,7 +106,11 @@ func (e *Elevator) SetStopLamp(value bool) {
 }
 
 func (e *Elevator) UpdateElevatorOrder(btn ButtonEvent) {
-	e.OrderList[btn.Floor][btn.Button] = Order_Pending
+	if btn.Button < 2 {
+		e.OrderListHall[btn.Floor][btn.Button] = Order_Pending
+	} else {
+		e.OrderListCab[btn.Floor] = Order_Pending
+	}
 }
 
 func (e *Elevator) UpdateFloor(Floor int) {
@@ -120,8 +126,8 @@ func (e *Elevator) UpdateRetning(Retning MotorDirection) {
 
 func (e *Elevator) HasOrderAbove() bool {
 	for i := e.Floor + 1; i < _numFloors; i++ {
-		for j := 0; j < numButtons; j++ {
-			if e.OrderList[i][j] == Order_Active {
+		for j := 0; j < 2; j++ {
+			if (e.OrderListHall[i][j] == Order_Active) || (e.OrderListCab[i] == Order_Active) {
 				return true
 			}
 		}
@@ -132,8 +138,8 @@ func (e *Elevator) HasOrderAbove() bool {
 
 func (e *Elevator) HasOrderBelow() bool {
 	for i := e.Floor - 1; i >= 0; i-- {
-		for j := 0; j < numButtons; j++ {
-			if e.OrderList[i][j] == Order_Active {
+		for j := 0; j < 2; j++ {
+			if (e.OrderListHall[i][j] == Order_Active) || (e.OrderListCab[i] == Order_Active) {
 				return true
 			}
 		}
@@ -143,18 +149,21 @@ func (e *Elevator) HasOrderBelow() bool {
 }
 
 func (e *Elevator) FloorOrder() bool {
-	for i := 0; i < numButtons; i++ {
-		if e.OrderList[e.Floor][i] == Order_Active {
+	for i := 0; i < 2; i++ {
+		if e.OrderListHall[e.Floor][i] == Order_Active {
 			return true
 		}
+	}
+	if e.OrderListCab[e.Floor] == Order_Active {
+		return true
 	}
 	return false
 }
 
 func (e *Elevator) ActiveOrders() bool { //needed for PollFloorSensor
 	for i := 0; i < _numFloors; i++ {
-		for j := 0; j < numButtons; j++ {
-			if e.OrderList[i][j] == Order_Active {
+		for j := 0; j < 2; j++ {
+			if (e.OrderListHall[i][j] == Order_Active) || (e.OrderListCab[i] == Order_Active) {
 				return true
 			}
 		}
@@ -163,19 +172,22 @@ func (e *Elevator) ActiveOrders() bool { //needed for PollFloorSensor
 }
 
 func (e *Elevator) ClearOrderFloor() { // mulig ikke lur måte å gjøre det på
-	for i := 0; i < numButtons; i++ {
-		if e.OrderList[e.Floor][i] == Order_Active {
-			e.OrderList[e.Floor][i] = Order_Inactive
+	for i := 0; i < 2; i++ {
+		if e.OrderListHall[e.Floor][i] == Order_Active {
+			e.OrderListHall[e.Floor][i] = Order_Inactive
 			e.SetButtonLamp(ButtonType(i), e.Floor, false)
 		}
-
+	}
+	if e.OrderListCab[e.Floor] == Order_Active {
+		e.OrderListCab[e.Floor] = Order_Inactive
+		e.SetButtonLamp(ButtonType(2), e.Floor, false)
 	}
 }
 
 func (e *Elevator) ClearOrderHallBtn() { // mulig ikke lur måte å gjøre det på
-	for i := 0; i < numButtons-1; i++ {
-		if e.OrderList[e.Floor][i] == Order_Active {
-			e.OrderList[e.Floor][i] = Order_Inactive
+	for i := 0; i < 2; i++ {
+		if e.OrderListHall[e.Floor][i] == Order_Active {
+			e.OrderListHall[e.Floor][i] = Order_Inactive
 			e.SetButtonLamp(ButtonType(i), e.Floor, false)
 		}
 
@@ -225,17 +237,17 @@ func (e *Elevator) ExecuteOrder() { // må kanskje forkaste hele denne til forde
 	switch {
 	case e.FloorOrder():
 		switch {
-		case e.OrderList[e.Floor][2] == Order_Active: // knapp cab
+		case e.OrderListCab[e.Floor] == Order_Active: // knapp cab
 			e.StoppFloor()
-		case (e.Retning == 1) && (e.OrderList[e.Floor][0] == Order_Active): //på tur oppover og knapp hall opp
+		case (e.Retning == 1) && (e.OrderListHall[e.Floor][0] == Order_Active): //på tur oppover og knapp hall opp
 			e.StoppFloor()
-		case e.Retning == -1 && (e.OrderList[e.Floor][1] == Order_Active): // tur nedover knapp hall ned
+		case e.Retning == -1 && (e.OrderListHall[e.Floor][1] == Order_Active): // tur nedover knapp hall ned
 			e.StoppFloor()
-		case e.Retning == 0 && ((e.OrderList[e.Floor][1] == Order_Active) || (e.OrderList[e.Floor][0] == Order_Active)): // står i ro, hall up/down åpen dør
+		case e.Retning == 0 && ((e.OrderListHall[e.Floor][1] == Order_Active) || (e.OrderListHall[e.Floor][0] == Order_Active)): // står i ro, hall up/down åpen dør
 			e.StoppFloor()
-		case (e.Retning == -1) && (e.OrderList[e.Floor][0] == Order_Active) && (!e.HasOrderBelow()):
+		case (e.Retning == -1) && (e.OrderListHall[e.Floor][0] == Order_Active) && (!e.HasOrderBelow()):
 			e.StoppFloor()
-		case (e.Retning == 1) && (e.OrderList[e.Floor][1] == Order_Active) && (!e.HasOrderAbove()):
+		case (e.Retning == 1) && (e.OrderListHall[e.Floor][1] == Order_Active) && (!e.HasOrderAbove()):
 			e.StoppFloor()
 
 		default:
@@ -303,13 +315,13 @@ func (e *Elevator) SteinSaksPapir(Node ElevatorStatus) { //Utfører steinsakspap
 	for i := 0; i < _numFloors; i++ {
 		for j := 0; j < 2; j++ {
 			switch {
-			case (e.OrderList[i][j] == Order_Inactive) && (Node.OrderList[i][j] == Order_Pending): // var inaktiv, får pending fra annen node = pending
-				e.OrderList[i][j] = Order_Pending
-			case (e.OrderList[i][j] == Order_Pending) && ((Node.OrderList[i][j] == Order_Pending) || (Node.OrderList[i][j] == Order_Active)): // Ordre er pending, får enten pending eller aktiv fra annen node -> aktiv
-				e.OrderList[i][j] = Order_Active
+			case (e.OrderListHall[i][j] == Order_Inactive) && (Node.OrderListHall[i][j] == Order_Pending): // var inaktiv, får pending fra annen node = pending
+				e.OrderListHall[i][j] = Order_Pending
+			case (e.OrderListHall[i][j] == Order_Pending) && ((Node.OrderListHall[i][j] == Order_Pending) || (Node.OrderListHall[i][j] == Order_Active)): // Ordre er pending, får enten pending eller aktiv fra annen node -> aktiv
+				e.OrderListHall[i][j] = Order_Active
 				e.SetButtonLamp(ButtonType(j), i, true) // noe av det dummeste jeg har sett, caste i som er en int til buttontype som er en int
-			case (e.OrderList[i][j] == Order_Active) && (Node.OrderList[i][j] == Order_Inactive): // Ordre er aktiv, blir utført annen node->satt inaktiv der = inaktiv her
-				e.OrderList[i][j] = Order_Inactive
+			case (e.OrderListHall[i][j] == Order_Active) && (Node.OrderListHall[i][j] == Order_Inactive): // Ordre er aktiv, blir utført annen node->satt inaktiv der = inaktiv her
+				e.OrderListHall[i][j] = Order_Inactive
 				e.SetButtonLamp(ButtonType(j), i, false)
 			default: // legge til noe her? Usikker hva default case burde være
 				continue
@@ -320,8 +332,8 @@ func (e *Elevator) SteinSaksPapir(Node ElevatorStatus) { //Utfører steinsakspap
 	CabBackup := Node.CabBackupMap[e.ID]
 	for k := 0; k < _numFloors; k++ {
 		switch {
-		case (e.OrderList[k][2] == Order_Pending) && CabBackup[k] == Order_Active:
-			e.OrderList[k][2] = Order_Active
+		case (e.OrderListCab[k] == Order_Pending) && CabBackup[k] == Order_Active:
+			e.OrderListCab[k] = Order_Active
 			e.SetButtonLamp(ButtonType(2), k, true)
 
 		default:
@@ -334,7 +346,7 @@ func (e *Elevator) CabBackupFunc(Node ElevatorStatus) {
 	CabBackup := e.CabBackupMap[Node.SenderID]
 
 	for k := 0; k < _numFloors; k++ {
-		incomingCabstate := Node.OrderList[k][2]
+		incomingCabstate := Node.OrderListCab[k]
 		currentBackupState := CabBackup[k]
 		switch {
 		case (currentBackupState == Order_Inactive) && (incomingCabstate == Order_Pending):
