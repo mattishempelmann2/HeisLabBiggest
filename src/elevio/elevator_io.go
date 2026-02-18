@@ -16,6 +16,21 @@ var topFloor int = _numFloors - 1
 var _mtx sync.Mutex
 var _conn net.Conn
 
+func Init(addr string, numFloors int) {
+	if _initialized {
+		fmt.Println("Driver already initialized!")
+		return
+	}
+	_numFloors = numFloors
+	_mtx = sync.Mutex{}
+	var err error
+	_conn, err = net.Dial("tcp", addr)
+	if err != nil {
+		panic(err.Error())
+	}
+	_initialized = true
+}
+
 type MotorDirection int
 
 const (
@@ -38,19 +53,22 @@ type ButtonEvent struct {
 }
 
 type Elevator struct {
-	OrderList   [4][numButtons]OrderStatus
-	Floor       int
-	Retning     MotorDirection
-	PrevRetning MotorDirection
-	DoorOpen    bool
-	AliveNodes  map[int]bool
+	OrderList    [4][numButtons]OrderStatus
+	CabBackupMap map[string][4]OrderStatus
+	Floor        int
+	Retning      MotorDirection
+	PrevRetning  MotorDirection
+	DoorOpen     bool
+	AliveNodes   map[string]bool
+	ID           string
 }
 
 type ElevatorStatus struct { //det som sendes, health checks
-	SenderID     int
+	SenderID     string
 	CurrentFloor int
 	Direction    int
 	OrderList    [4][3]OrderStatus
+	CabBackupMap map[string][4]OrderStatus
 	MsgID        int //For å holde styr på rekkefølge, forkaste gamle meldinger
 	DoorOpen     bool
 }
@@ -62,21 +80,6 @@ const (
 	Order_Pending  = 1 // UDP har vist checksum så mulig irellevant, kanskje bruke 0 til unknown siden det er default value for int?
 	Order_Active   = 2
 )
-
-func Init(addr string, numFloors int) {
-	if _initialized {
-		fmt.Println("Driver already initialized!")
-		return
-	}
-	_numFloors = numFloors
-	_mtx = sync.Mutex{}
-	var err error
-	_conn, err = net.Dial("tcp", addr)
-	if err != nil {
-		panic(err.Error())
-	}
-	_initialized = true
-}
 
 func (e *Elevator) SetMotorDirection(dir MotorDirection) {
 	write([4]byte{1, byte(dir), 0, 0})
@@ -189,7 +192,7 @@ func (e *Elevator) DriveTo(floor int) { // fjern
 	}
 }
 
-func (e *Elevator) CabInit() {
+func (e *Elevator) CabInit(ID string) {
 	for GetFloor() != 0 {
 		e.SetMotorDirection(MD_Down)
 		time.Sleep(_pollRate)
@@ -199,7 +202,9 @@ func (e *Elevator) CabInit() {
 	e.PrevRetning = 0
 	e.Retning = 0
 	e.SetDoorOpenLamp(false)
-	e.AliveNodes = make(map[int]bool)
+	e.AliveNodes = make(map[string]bool)
+	e.CabBackupMap = make(map[string][4]OrderStatus)
+	e.ID = ID
 }
 
 func (e *Elevator) DoorTimer(SendDone chan<- bool) {
@@ -211,9 +216,6 @@ func (e *Elevator) StoppFloor() {
 	e.SetMotorDirection(0)
 	e.DoorOpen = true
 	e.SetDoorOpenLamp(true)
-	//time.Sleep(3 * time.Second)
-	//e.DoorOpen = false
-	//e.SetDoorOpenLamp(false)
 	e.ClearOrderFloor()
 }
 
@@ -235,7 +237,7 @@ func (e *Elevator) ExecuteOrder() { // må kanskje forkaste hele denne til forde
 			e.StoppFloor()
 
 		default:
-			break // mulig redundant
+			e.SetMotorDirection(0) // mulig redundant
 		}
 
 	case e.HasOrderAbove():
@@ -262,7 +264,7 @@ func (e *Elevator) ExecuteOrder() { // må kanskje forkaste hele denne til forde
 			e.SetMotorDirection(1)
 
 		default:
-			break
+			e.SetMotorDirection(0)
 		}
 
 	case e.HasOrderBelow():
@@ -286,7 +288,7 @@ func (e *Elevator) ExecuteOrder() { // må kanskje forkaste hele denne til forde
 			e.SetMotorDirection(-1)
 
 		default:
-			break
+			e.SetMotorDirection(0)
 		}
 
 	default:
@@ -297,7 +299,7 @@ func (e *Elevator) ExecuteOrder() { // må kanskje forkaste hele denne til forde
 
 func (e *Elevator) SteinSaksPapir(Node ElevatorStatus) { //Utfører steinsakspapir algebra
 	for i := 0; i < _numFloors; i++ {
-		for j := 0; j < numButtons; j++ {
+		for j := 0; j < 2; j++ {
 			switch {
 			case (e.OrderList[i][j] == Order_Inactive) && (Node.OrderList[i][j] == Order_Pending): // var inaktiv, får pending fra annen node = pending
 				e.OrderList[i][j] = Order_Pending
@@ -312,6 +314,42 @@ func (e *Elevator) SteinSaksPapir(Node ElevatorStatus) { //Utfører steinsakspap
 			}
 		}
 	}
+	//skru på lamper cab orders, aktiver de basert på å sjekke map fra andre elev og egen orderlist
+	CabBackup := Node.CabBackupMap[e.ID]
+	for k := 0; k < _numFloors; k++ {
+		switch {
+		case (e.OrderList[k][2] == Order_Pending) && CabBackup[k] == Order_Active:
+			e.OrderList[k][2] = Order_Active
+			e.SetButtonLamp(ButtonType(2), k, true)
+
+		default:
+			continue
+		}
+	}
+}
+
+func (e *Elevator) CabBackupFunc(Node ElevatorStatus) {
+	CabBackup := e.CabBackupMap[Node.SenderID]
+
+	for k := 0; k < _numFloors; k++ {
+		incomingCabstate := Node.OrderList[k][2]
+		currentBackupState := CabBackup[k]
+		switch {
+		case (currentBackupState == Order_Inactive) && (incomingCabstate == Order_Pending):
+			CabBackup[k] = Order_Pending
+
+		case (currentBackupState == Order_Pending) && (incomingCabstate == Order_Pending || incomingCabstate == Order_Active):
+			CabBackup[k] = Order_Active
+
+		case (currentBackupState == Order_Active) && (incomingCabstate == Order_Inactive):
+			CabBackup[k] = Order_Inactive
+
+		default:
+			continue
+		}
+
+	}
+	e.CabBackupMap[Node.SenderID] = CabBackup
 }
 
 func PollButtons(receiver chan<- ButtonEvent) {

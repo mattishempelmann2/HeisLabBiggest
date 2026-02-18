@@ -27,7 +27,7 @@ func PrintOrderMatrix(e elevio.ElevatorStatus) {
 
 func main() {
 	counter := 0 //
-	lastSeenMap := make(map[int]int)
+	lastSeenMap := make(map[string]int)
 	var lastSeenOrder [4][3]elevio.OrderStatus
 
 	localID := 15657 // bruke noe
@@ -35,17 +35,17 @@ func main() {
 	StatusTx := make(chan elevio.ElevatorStatus) //channel med status
 	StatusRx := make(chan elevio.ElevatorStatus)
 
-	go bcast.Transmitter(20014, StatusTx) //idk hvilken port som er korrekt
-	go bcast.Receiver(20014, StatusRx)
+	go bcast.Transmitter(20013, StatusTx) //idk hvilken port som er korrekt
+	go bcast.Receiver(20013, StatusRx)
 
 	sendTicker := time.NewTicker(10 * time.Millisecond) // ticker = går av periodically forever, hvor ofte sender vi status
 
-	const numFloors = 4
+	const NumFloors = 4
 	address := fmt.Sprintf("localhost:%d", localID) //slipper å manuelt skrive inn argument til init
-	elevio.Init(address, numFloors)
+	elevio.Init(address, NumFloors)
 
 	cab1 := &elevio.Elevator{}
-	cab1.CabInit() //Init func
+	cab1.CabInit(address) //Init func
 
 	var d elevio.MotorDirection = elevio.MD_Up // fjern etter hvert
 	//cab1.SetMotorDirection(d)
@@ -94,10 +94,11 @@ func main() {
 
 		case <-sendTicker.C: //Periodisk statusupdate
 			msg := elevio.ElevatorStatus{ //Lager statusmelding
-				SenderID:     localID,
+				SenderID:     address,
 				CurrentFloor: cab1.Floor,
 				Direction:    int(cab1.Retning),
 				OrderList:    cab1.OrderList,
+				CabBackupMap: cab1.CabBackupMap,
 				MsgID:        counter,
 				DoorOpen:     cab1.DoorOpen, //bruke counter som MsgID
 			}
@@ -105,16 +106,16 @@ func main() {
 			counter++       // dårlig quickfix, gjør om til medlemsvariabel senere
 
 		case msg := <-StatusRx: //Mottar status update
-			if (msg.SenderID == localID) || msg.MsgID < lastSeenMap[msg.SenderID] {
+			if (msg.SenderID == address) || msg.MsgID < lastSeenMap[msg.SenderID] {
 				continue
 			}
 
-			if msg.CurrentFloor != -1 { // kanskje ikke lurt
+			if msg.CurrentFloor != -1 { // kanskje ikke lurt, redundant
 				if msg.DoorOpen {
 					cab1.ClearOrderHallBtn()
 				}
 			}
-
+			cab1.CabBackupFunc(msg)
 			cab1.SteinSaksPapir(msg) // hvis ikke egen eller gammel melding, gjør steinsakspapir algebra
 
 			lastSeenMap[msg.SenderID] = msg.MsgID // oppdater sist sett.
@@ -137,7 +138,7 @@ func main() {
 
 		case a := <-drv_stop: //stop bryter
 			fmt.Printf("%+v\n", a)
-			for f := 0; f < numFloors; f++ {
+			for f := 0; f < NumFloors; f++ {
 				for b := elevio.ButtonType(0); b < 3; b++ {
 					cab1.SetButtonLamp(b, f, false)
 				}
