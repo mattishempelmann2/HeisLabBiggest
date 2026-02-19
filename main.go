@@ -29,8 +29,8 @@ func PrintOrderMatrix(e elevio.ElevatorStatus) {
 		default:
 			fmt.Printf("[%s] ", " ")
 		}
-		fmt.Printf("\n")
 	}
+	fmt.Printf("msgID: %d, from NodeID: %s \n", e.MsgID, e.SenderID)
 }
 
 func main() {
@@ -123,7 +123,6 @@ func main() {
 			//fmt.Printf("Received message from %d at floor %d \n", msg.SenderID, msg.CurrentFloor)
 			if (msg.OrderListHall != lastSeenOrderHall[msg.SenderID]) || (msg.OrderListCab != lastSeenOrderCab[msg.SenderID]) { // kun print ved endring, slipper spam
 				PrintOrderMatrix(msg)
-				fmt.Printf("msgID: %d \n", msg.MsgID)
 				lastSeenOrderHall[msg.SenderID] = msg.OrderListHall
 				lastSeenOrderCab[msg.SenderID] = msg.OrderListCab
 			}
