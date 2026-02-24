@@ -221,7 +221,7 @@ func (e *Elevator) CabInit(ID string) {
 	e.MsgCount = 0
 }
 
-func (e *Elevator) DoorTimer(SendDone chan<- bool) {
+func (e *Elevator) DoorTimer(SendDone chan<- bool) { // ikke i bruk, fjern! Veldig dårlig løsning
 	time.Sleep(3 * time.Second)
 	SendDone <- true
 }
@@ -343,9 +343,9 @@ func (e *Elevator) SteinSaksPapir(Node ElevatorStatus) { //Utfører steinsakspap
 }
 
 func (e *Elevator) CabBackupFunc(Node ElevatorStatus) {
-	CabBackup := e.CabBackupMap[Node.SenderID]
+	CabBackup := e.CabBackupMap[Node.SenderID] // Henter map med caborder for NODE vi snakker med atm
 
-	for k := 0; k < _numFloors; k++ {
+	for k := 0; k < _numFloors; k++ { // gjør endringer på map basert på map og melding fra node vi snakker med
 		incomingCabstate := Node.OrderListCab[k]
 		currentBackupState := CabBackup[k]
 		switch {
@@ -363,7 +363,7 @@ func (e *Elevator) CabBackupFunc(Node ElevatorStatus) {
 		}
 
 	}
-	e.CabBackupMap[Node.SenderID] = CabBackup
+	e.CabBackupMap[Node.SenderID] = CabBackup // skriver ny status til map
 }
 
 func PollButtons(receiver chan<- ButtonEvent) {

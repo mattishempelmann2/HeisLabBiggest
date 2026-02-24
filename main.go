@@ -29,6 +29,7 @@ func PrintOrderMatrix(e elevio.ElevatorStatus) {
 		default:
 			fmt.Printf("[%s] ", " ")
 		}
+		fmt.Printf("\n")
 	}
 	fmt.Printf("msgID: %d, from NodeID: %s \n", e.MsgID, e.SenderID)
 }
