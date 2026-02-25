@@ -155,7 +155,8 @@ func main() {
 			}
 		}
 		if runCost {
-			cab1.AssignedOrders = cost.CostFunc(cost.MakeHRAInput(*cab1, OtherNodes))[address]
+			cab1.AssignedOrders = cost.CostFunc(cost.MakeHRAInput(*cab1, OtherNodes))[address] // mp fikse slik at den ikke bruker døde nodes i beregning
+			cab1.UpdateHallLights()
 		}
 	}
 }

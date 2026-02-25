@@ -137,7 +137,6 @@ func (e *Elevator) HasOrderAbove() bool {
 	for f := e.Floor + 1; f < _numFloors; f++ {
 		for b := 0; b < 2; b++ {
 			if e.AssignedOrders[f][b] || (e.OrderListCab[f] == Order_Active) {
-				e.SetButtonLamp(ButtonType(b), f, true)
 				return true
 			}
 		}
@@ -150,7 +149,6 @@ func (e *Elevator) HasOrderBelow() bool {
 	for f := e.Floor - 1; f >= 0; f-- {
 		for b := 0; b < 2; b++ {
 			if e.AssignedOrders[f][b] || (e.OrderListCab[f] == Order_Active) {
-				e.SetButtonLamp(ButtonType(b), f, true)
 				return true
 			}
 		}
@@ -162,7 +160,6 @@ func (e *Elevator) HasOrderBelow() bool {
 func (e *Elevator) FloorOrder() bool {
 	for b := 0; b < 2; b++ {
 		if e.AssignedOrders[e.Floor][b] {
-			e.SetButtonLamp(ButtonType(b), e.Floor, true)
 			return true
 		}
 	}
@@ -315,7 +312,7 @@ func (e *Elevator) SteinSaksPapir(Node ElevatorStatus) { //Utfører steinsakspap
 				//e.SetButtonLamp(ButtonType(j), i, true) // noe av det dummeste jeg har sett, caste i som er en int til buttontype som er en int
 			case (e.OrderListHall[i][j] == Order_Active) && (Node.OrderListHall[i][j] == Order_Inactive): // Ordre er aktiv, blir utført annen node->satt inaktiv der = inaktiv her
 				e.OrderListHall[i][j] = Order_Inactive
-				//e.SetButtonLamp(ButtonType(j), i, false)
+				e.SetButtonLamp(ButtonType(j), i, false)
 			default: // legge til noe her? Usikker hva default case burde være
 				continue
 			}
@@ -367,6 +364,14 @@ func (e *Elevator) UpdateBehaviour() {
 		e.Behaviour = "moving"
 	default:
 		e.Behaviour = "idle"
+	}
+}
+
+func (e *Elevator) UpdateHallLights() {
+	for f := 0; f < 4; f++ {
+		for b := 0; b < 2; b++ {
+			e.SetButtonLamp(ButtonType(b), f, e.AssignedOrders[f][b])
+		}
 	}
 }
 
