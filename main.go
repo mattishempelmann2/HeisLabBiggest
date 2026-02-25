@@ -36,7 +36,7 @@ func PrintOrderMatrix(e elevio.ElevatorStatus) {
 }
 
 func main() {
-	OtherNodes := make(map[string]elevio.ElevatorStatus)
+	OtherNodes := make(map[string]elevio.ElevatorStatus)     //denne gis til costfunc
 	lastSeen := make(map[string]time.Time)                   //map for å notere når node_x sist sett
 	watchdogTicker := time.NewTicker(500 * time.Millisecond) //sjekk 2 gang i sekund om node død
 	nodeTimeout := 3 * time.Second                           // juster om vi må
@@ -143,9 +143,9 @@ func main() {
 			cab1.SteinSaksPapir(msg) // hvis ikke egen eller gammel melding, gjør steinsakspapir algebra
 
 			stateChanged := (msg.OrderListHall != OtherNodes[msg.SenderID].OrderListHall) || (msg.OrderListCab != OtherNodes[msg.SenderID].OrderListCab) // Sjekk om state changed, sparer print og beregning
-			OtherNodes[msg.SenderID] = msg
+			OtherNodes[msg.SenderID] = msg                                                                                                               //ta vare på siste msg
 
-			if stateChanged { // kun print ved endring, slipper spam
+			if stateChanged { // kun print/gjør beregning ved endring, slipper spam
 				PrintOrderMatrix(msg)
 				runCost = true
 			}
@@ -176,7 +176,7 @@ func main() {
 		}
 		if runCost {
 			cab1.AssignedOrders = cost.CostFunc(cost.MakeHRAInput(*cab1, OtherNodes))[address]
-			cab1.UpdateHallLights()
+			cab1.UpdateHallLights() // synkroniserer hall lights
 		}
 	}
 }
