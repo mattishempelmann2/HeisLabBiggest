@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	cost "heis/src/cost_func"
 	"heis/src/elevio"
 	"heis/src/network/bcast"
 	"time"
@@ -40,7 +41,7 @@ func main() {
 	//lastSeenOrderCab := make(map[string][4]elevio.OrderStatus)     //
 	OtherNodes := make(map[string]elevio.ElevatorStatus)
 
-	localID := 15657 // bruke noe
+	localID := 15656 // bruke noe
 
 	StatusTx := make(chan elevio.ElevatorStatus) //channel med status
 	StatusRx := make(chan elevio.ElevatorStatus)
@@ -126,6 +127,7 @@ func main() {
 			//fmt.Printf("Received message from %d at floor %d \n", msg.SenderID, msg.CurrentFloor)
 			if (msg.OrderListHall != OtherNodes[msg.SenderID].OrderListHall) || (msg.OrderListCab != OtherNodes[msg.SenderID].OrderListCab) { // kun print ved endring, slipper spam
 				PrintOrderMatrix(msg)
+				cost.CostFunc(cost.MakeHRAInput(*cab1, OtherNodes["localhost:15657"], OtherNodes["localhost:15655"]))
 				//lastSeenOrderHall[msg.SenderID] = msg.OrderListHall
 				//lastSeenOrderCab[msg.SenderID] = msg.OrderListCab
 			}

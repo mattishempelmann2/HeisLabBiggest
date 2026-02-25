@@ -1,8 +1,11 @@
 package cost
 
 import (
+	"encoding/json"
 	"fmt"
 	"heis/src/elevio"
+	"os/exec"
+	"runtime"
 )
 
 var dirMap = map[int]string{
@@ -18,14 +21,14 @@ var OrderBoolMap = map[elevio.OrderStatus]bool{
 }
 
 type HRAElevState struct {
-	Behavior    string `json:"behaviour"`
-	Floor       int    `json:"floor"`
-	Direction   string `json:"direction"`
-	CabRequests []bool `json:"cabRequests"`
+	Behavior    string  `json:"behaviour"`
+	Floor       int     `json:"floor"`
+	Direction   string  `json:"direction"`
+	CabRequests [4]bool `json:"cabRequests"`
 }
 
 type HRAInput struct {
-	HallRequests [][2]bool               `json:"hallRequests"`
+	HallRequests [4][2]bool              `json:"hallRequests"`
 	States       map[string]HRAElevState `json:"states"`
 }
 
@@ -53,8 +56,10 @@ func makeHRAElevState(Node any) HRAElevState {
 	return *elevState
 }
 
-func makeHRAInput(localNode elevio.Elevator, Node1 elevio.ElevatorStatus, Node2 elevio.ElevatorStatus) HRAInput {
+func MakeHRAInput(localNode elevio.Elevator, Node1 elevio.ElevatorStatus, Node2 elevio.ElevatorStatus) HRAInput {
 	HRAInput := &HRAInput{}
+	HRAInput.States = make(map[string]HRAElevState)
+
 	localHRA := makeHRAElevState(localNode)
 	externalHRA1 := makeHRAElevState(Node1)
 	externalHRA2 := makeHRAElevState(Node2)
@@ -69,4 +74,42 @@ func makeHRAInput(localNode elevio.Elevator, Node1 elevio.ElevatorStatus, Node2 
 	HRAInput.States[Node2.SenderID] = externalHRA2
 
 	return *HRAInput
+}
+
+func CostFunc(input HRAInput) {
+
+	hraExecutable := ""
+	switch runtime.GOOS {
+	case "linux":
+		hraExecutable = "hall_request_assigner"
+	case "windows":
+		hraExecutable = "hall_request_assigner.exe"
+	default:
+		panic("OS not supported")
+	}
+
+	jsonBytes, err := json.Marshal(input)
+	if err != nil {
+		fmt.Println("json.Marshal error: ", err)
+		return
+	}
+
+	ret, err := exec.Command("./cost_fns/hall_request_assigner/"+hraExecutable, "-i", string(jsonBytes)).CombinedOutput()
+	if err != nil {
+		fmt.Println("exec.Command error: ", err)
+		fmt.Println(string(ret))
+		return
+	}
+
+	output := new(map[string][][2]bool)
+	err = json.Unmarshal(ret, &output)
+	if err != nil {
+		fmt.Println("json.Unmarshal error: ", err)
+		return
+	}
+
+	fmt.Printf("output: \n")
+	for k, v := range *output {
+		fmt.Printf("%6v :  %+v\n", k, v)
+	}
 }

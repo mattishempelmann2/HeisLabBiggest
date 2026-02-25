@@ -57,11 +57,11 @@ type Elevator struct {
 	OrderListCab  [4]OrderStatus
 	CabBackupMap  map[string][4]OrderStatus
 
-	Floor       int
+	Floor         int
 	Direction     MotorDirection
 	PrevDirection MotorDirection
-	DoorOpen    bool
-	Behaviour   string
+	DoorOpen      bool
+	Behaviour     string
 
 	AliveNodes map[string]bool
 	ID         string
