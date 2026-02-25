@@ -101,7 +101,7 @@ func main() {
 			msg := elevio.ElevatorStatus{ //Lager statusmelding
 				SenderID:      address,
 				CurrentFloor:  cab1.Floor,
-				Direction:     int(cab1.Retning),
+				Direction:     int(cab1.Direction),
 				OrderListHall: cab1.OrderListHall,
 				OrderListCab:  cab1.OrderListCab,
 				CabBackupMap:  cab1.CabBackupMap,

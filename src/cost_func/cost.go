@@ -1,0 +1,72 @@
+package cost
+
+import (
+	"fmt"
+	"heis/src/elevio"
+)
+
+var dirMap = map[int]string{
+	1:  "up",
+	-1: "down",
+	0:  "stop",
+}
+
+var OrderBoolMap = map[elevio.OrderStatus]bool{
+	elevio.Order_Inactive: false,
+	elevio.Order_Pending:  false,
+	elevio.Order_Active:   true,
+}
+
+type HRAElevState struct {
+	Behavior    string `json:"behaviour"`
+	Floor       int    `json:"floor"`
+	Direction   string `json:"direction"`
+	CabRequests []bool `json:"cabRequests"`
+}
+
+type HRAInput struct {
+	HallRequests [][2]bool               `json:"hallRequests"`
+	States       map[string]HRAElevState `json:"states"`
+}
+
+func makeHRAElevState(Node any) HRAElevState {
+	elevState := &HRAElevState{}
+	switch Nodetype := Node.(type) {
+	case elevio.Elevator:
+		elevState.Behavior = Nodetype.Behaviour
+		elevState.Floor = Nodetype.Floor
+		elevState.Direction = dirMap[int(Nodetype.Direction)]
+		for floor := 0; floor < 4; floor++ {
+			elevState.CabRequests[floor] = OrderBoolMap[Nodetype.OrderListCab[floor]]
+		}
+
+	case elevio.ElevatorStatus:
+		elevState.Behavior = Nodetype.Behaviour
+		elevState.Floor = Nodetype.CurrentFloor
+		elevState.Direction = dirMap[int(Nodetype.Direction)]
+		for floor := 0; floor < 4; floor++ {
+			elevState.CabRequests[floor] = OrderBoolMap[Nodetype.OrderListCab[floor]]
+		}
+	default:
+		fmt.Printf("Unsupported Node type")
+	}
+	return *elevState
+}
+
+func makeHRAInput(localNode elevio.Elevator, Node1 elevio.ElevatorStatus, Node2 elevio.ElevatorStatus) HRAInput {
+	HRAInput := &HRAInput{}
+	localHRA := makeHRAElevState(localNode)
+	externalHRA1 := makeHRAElevState(Node1)
+	externalHRA2 := makeHRAElevState(Node2)
+
+	for floor := 0; floor < 4; floor++ {
+		for button := 0; button < 2; button++ {
+			HRAInput.HallRequests[floor][button] = OrderBoolMap[localNode.OrderListHall[floor][button]]
+		}
+	}
+	HRAInput.States[localNode.ID] = localHRA
+	HRAInput.States[Node1.SenderID] = externalHRA1
+	HRAInput.States[Node2.SenderID] = externalHRA2
+
+	return *HRAInput
+}

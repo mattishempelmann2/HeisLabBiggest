@@ -58,8 +58,8 @@ type Elevator struct {
 	CabBackupMap  map[string][4]OrderStatus
 
 	Floor       int
-	Retning     MotorDirection
-	PrevRetning MotorDirection
+	Direction     MotorDirection
+	PrevDirection MotorDirection
 	DoorOpen    bool
 	Behaviour   string
 
@@ -92,7 +92,7 @@ const (
 
 func (e *Elevator) SetMotorDirection(dir MotorDirection) {
 	write([4]byte{1, byte(dir), 0, 0})
-	e.UpdateRetning(dir)
+	e.UpdateDirection(dir)
 	e.UpdateBehaviour()
 }
 
@@ -127,9 +127,9 @@ func (e *Elevator) UpdateFloor(Floor int) {
 	}
 }
 
-func (e *Elevator) UpdateRetning(Retning MotorDirection) {
-	e.PrevRetning = e.Retning
-	e.Retning = Retning
+func (e *Elevator) UpdateDirection(Direction MotorDirection) {
+	e.PrevDirection = e.Direction
+	e.Direction = Direction
 }
 
 func (e *Elevator) HasOrderAbove() bool {
@@ -209,8 +209,8 @@ func (e *Elevator) CabInit(ID string) {
 	}
 	e.SetMotorDirection(0)
 	e.Floor = 0
-	e.PrevRetning = 0
-	e.Retning = 0
+	e.PrevDirection = 0
+	e.Direction = 0
 	e.DoorOpen = false
 	e.SetDoorOpenLamp(false)
 	e.AliveNodes = make(map[string]bool)
@@ -237,15 +237,15 @@ func (e *Elevator) ExecuteOrder() { // må kanskje forkaste hele denne til forde
 		switch {
 		case e.OrderListCab[e.Floor] == Order_Active: // knapp cab
 			e.StoppFloor()
-		case (e.Retning == 1) && (e.OrderListHall[e.Floor][0] == Order_Active): //på tur oppover og knapp hall opp
+		case (e.Direction == 1) && (e.OrderListHall[e.Floor][0] == Order_Active): //på tur oppover og knapp hall opp
 			e.StoppFloor()
-		case e.Retning == -1 && (e.OrderListHall[e.Floor][1] == Order_Active): // tur nedover knapp hall ned
+		case e.Direction == -1 && (e.OrderListHall[e.Floor][1] == Order_Active): // tur nedover knapp hall ned
 			e.StoppFloor()
-		case e.Retning == 0 && ((e.OrderListHall[e.Floor][1] == Order_Active) || (e.OrderListHall[e.Floor][0] == Order_Active)): // står i ro, hall up/down åpen dør
+		case e.Direction == 0 && ((e.OrderListHall[e.Floor][1] == Order_Active) || (e.OrderListHall[e.Floor][0] == Order_Active)): // står i ro, hall up/down åpen dør
 			e.StoppFloor()
-		case (e.Retning == -1) && (e.OrderListHall[e.Floor][0] == Order_Active) && (!e.HasOrderBelow()):
+		case (e.Direction == -1) && (e.OrderListHall[e.Floor][0] == Order_Active) && (!e.HasOrderBelow()):
 			e.StoppFloor()
-		case (e.Retning == 1) && (e.OrderListHall[e.Floor][1] == Order_Active) && (!e.HasOrderAbove()):
+		case (e.Direction == 1) && (e.OrderListHall[e.Floor][1] == Order_Active) && (!e.HasOrderAbove()):
 			e.StoppFloor()
 
 		default:
@@ -254,25 +254,25 @@ func (e *Elevator) ExecuteOrder() { // må kanskje forkaste hele denne til forde
 
 	case e.HasOrderAbove():
 		switch {
-		case e.Retning == 1: // Har odre over er på tur opp -> fortsett opp
+		case e.Direction == 1: // Har odre over er på tur opp -> fortsett opp
 			e.SetMotorDirection(1)
 
-		case e.Retning == -1: // HAr odre oveer er på tur ned -> fortsett ned
+		case e.Direction == -1: // HAr odre oveer er på tur ned -> fortsett ned
 			e.SetMotorDirection(-1)
 
-		case (e.Retning == 0) && (e.PrevRetning == 1) && e.Floor != topFloor: // Har ordre over, stoppet i etasje, var på tur opp og er ikke i toppetasjen -> kjør opp
+		case (e.Direction == 0) && (e.PrevDirection == 1) && e.Floor != topFloor: // Har ordre over, stoppet i etasje, var på tur opp og er ikke i toppetasjen -> kjør opp
 			e.SetMotorDirection(1)
 
-		case (e.Retning == 0) && (e.PrevRetning == -1) && (!e.HasOrderBelow()):
+		case (e.Direction == 0) && (e.PrevDirection == -1) && (!e.HasOrderBelow()):
 			e.SetMotorDirection(1)
 
-		case (e.Retning == 0) && (e.PrevRetning == -1) && e.Floor != 0: // Har ordre over, var på tur ned stopped i en etasje, ikke bunn etasje-> kjør nedover
+		case (e.Direction == 0) && (e.PrevDirection == -1) && e.Floor != 0: // Har ordre over, var på tur ned stopped i en etasje, ikke bunn etasje-> kjør nedover
 			e.SetMotorDirection(-1)
 
-		case (e.Retning == 0) && (e.PrevRetning != -1) && e.Floor != topFloor: // Har ordre over, stoppet i etasje, var ikke på tur og er ikke i toppetasjen -> kjør opp
+		case (e.Direction == 0) && (e.PrevDirection != -1) && e.Floor != topFloor: // Har ordre over, stoppet i etasje, var ikke på tur og er ikke i toppetasjen -> kjør opp
 			e.SetMotorDirection(1)
 
-		case (e.Retning == 0) && (e.Floor == 0):
+		case (e.Direction == 0) && (e.Floor == 0):
 			e.SetMotorDirection(1)
 
 		default:
@@ -281,22 +281,22 @@ func (e *Elevator) ExecuteOrder() { // må kanskje forkaste hele denne til forde
 
 	case e.HasOrderBelow():
 		switch {
-		case e.Retning == 1: // Har odre under er på tur opp -> fortsett opp
+		case e.Direction == 1: // Har odre under er på tur opp -> fortsett opp
 			e.SetMotorDirection(1)
 
-		case e.Retning == -1: // HAr odre oveer er på tur ned -> fortsett ned
+		case e.Direction == -1: // HAr odre oveer er på tur ned -> fortsett ned
 			e.SetMotorDirection(-1)
 
-		case (e.Retning == 0) && (e.PrevRetning == 1) && (!e.HasOrderAbove()): // står i ro, var på tur opp, har ikke odre over, men har under -> kjør ned
+		case (e.Direction == 0) && (e.PrevDirection == 1) && (!e.HasOrderAbove()): // står i ro, var på tur opp, har ikke odre over, men har under -> kjør ned
 			e.SetMotorDirection(-1)
 
-		case (e.Retning == 0) && (e.PrevRetning == 1) && e.Floor != topFloor: // Har ordre under, stoppet i etasje, var på tur opp og er ikke i toppetasjen -> kjør opp
+		case (e.Direction == 0) && (e.PrevDirection == 1) && e.Floor != topFloor: // Har ordre under, stoppet i etasje, var på tur opp og er ikke i toppetasjen -> kjør opp
 			e.SetMotorDirection(1)
 
-		case (e.Retning == 0) && (e.PrevRetning != 1) && e.Floor != 0: // Har ordre under, var ikke på tur opp, stoppet i en etasje, ikke bunn etasje-> kjør nedover
+		case (e.Direction == 0) && (e.PrevDirection != 1) && e.Floor != 0: // Har ordre under, var ikke på tur opp, stoppet i en etasje, ikke bunn etasje-> kjør nedover
 			e.SetMotorDirection(-1)
 
-		case (e.Retning == 0) && (e.Floor == topFloor): // mulig redundant
+		case (e.Direction == 0) && (e.Floor == topFloor): // mulig redundant
 			e.SetMotorDirection(-1)
 
 		default:
@@ -368,7 +368,7 @@ func (e *Elevator) UpdateBehaviour() {
 	switch {
 	case e.DoorOpen:
 		e.Behaviour = "doorOpen"
-	case e.Retning != 0:
+	case e.Direction != 0:
 		e.Behaviour = "moving"
 	default:
 		e.Behaviour = "idle"
