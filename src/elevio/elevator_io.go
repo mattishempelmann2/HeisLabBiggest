@@ -325,7 +325,12 @@ func (e *Elevator) SteinSaksPapir(Node ElevatorStatus) { //Utfører steinsakspap
 		case (e.OrderListCab[k] == Order_Pending) && CabBackup[k] == Order_Active:
 			e.OrderListCab[k] = Order_Active
 			e.SetButtonLamp(ButtonType(2), k, true)
-
+		case (e.OrderListCab[k] == Order_Inactive) && CabBackup[k] == Order_Active && e.MsgCount < 100: // Hvis under 100msg sendt, første sek, oppstart, vi tillater recovery fra andre noder
+			if e.Floor == k && e.DoorOpen { // Unngår dobbel aktivering av ordre i 0 etasje etter reboot, slipper 6 sekund dør åpning
+				continue
+			}
+			e.OrderListCab[k] = Order_Active
+			e.SetButtonLamp(ButtonType(2), k, true)
 		default:
 			continue
 		}

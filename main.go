@@ -37,9 +37,9 @@ func PrintOrderMatrix(e elevio.ElevatorStatus) {
 
 func main() {
 	OtherNodes := make(map[string]elevio.ElevatorStatus)
-	lastSeen := make(map[string]time.Time) //map for å notere når node_x sist sett
-	watchdogTicker := time.NewTicker(500 * time.Millisecond)
-	nodeTimeout := 3 * time.Second
+	lastSeen := make(map[string]time.Time)                   //map for å notere når node_x sist sett
+	watchdogTicker := time.NewTicker(500 * time.Millisecond) //sjekk 2 gang i sekund om node død
+	nodeTimeout := 3 * time.Second                           // juster om vi må
 
 	localID := 15657 // bruke noe
 
@@ -100,6 +100,9 @@ func main() {
 			cab1.DoorOpen = false
 			cab1.SetDoorOpenLamp(false)
 			cab1.ExecuteOrder()
+			if cab1.DoorOpen {
+				doorTimer.Reset(3 * time.Second) // Viktig siden, hvis vi har cab order til 0.etasje etter reboot, blir vi stuck uten, da dører åpnes uten å resete timer
+			}
 			runCost = true
 
 		case <-sendTicker.C: //Periodisk statusupdate
@@ -172,7 +175,7 @@ func main() {
 			}
 		}
 		if runCost {
-			cab1.AssignedOrders = cost.CostFunc(cost.MakeHRAInput(*cab1, OtherNodes))[address] // mp fikse slik at den ikke bruker døde nodes i beregning
+			cab1.AssignedOrders = cost.CostFunc(cost.MakeHRAInput(*cab1, OtherNodes))[address]
 			cab1.UpdateHallLights()
 		}
 	}
