@@ -132,7 +132,7 @@ func main() {
 
 			if !cab1.AliveNodes[msg.SenderID] {
 				cab1.AliveNodes[msg.SenderID] = true // setter true dersom den ikke er det
-				fmt.Printf("Node %s connected", msg.SenderID)
+				fmt.Printf("Node %s connected \n", msg.SenderID)
 				runCost = true //beregn på nytt, har fått ny node i systemet
 			}
 
