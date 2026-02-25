@@ -37,6 +37,9 @@ func PrintOrderMatrix(e elevio.ElevatorStatus) {
 
 func main() {
 	OtherNodes := make(map[string]elevio.ElevatorStatus)
+	lastSeen := make(map[string]time.Time) //map for å notere når node_x sist sett
+	watchdogTicker := time.NewTicker(500 * time.Millisecond)
+	nodeTimeout := 3 * time.Second
 
 	localID := 15657 // bruke noe
 
@@ -125,10 +128,16 @@ func main() {
 				continue
 			}
 
+			lastSeen[msg.SenderID] = time.Now()
+
+			if !cab1.AliveNodes[msg.SenderID] {
+				cab1.AliveNodes[msg.SenderID] = true // setter true dersom den ikke er det
+				fmt.Printf("Node %s connected", msg.SenderID)
+				runCost = true //beregn på nytt, har fått ny node i systemet
+			}
+
 			cab1.CabBackupFunc(msg)  // back up cab orders fra melding mottat
 			cab1.SteinSaksPapir(msg) // hvis ikke egen eller gammel melding, gjør steinsakspapir algebra
-
-			cab1.AliveNodes[msg.SenderID] = true // denne noden lever, sett som true
 
 			stateChanged := (msg.OrderListHall != OtherNodes[msg.SenderID].OrderListHall) || (msg.OrderListCab != OtherNodes[msg.SenderID].OrderListCab) // Sjekk om state changed, sparer print og beregning
 			OtherNodes[msg.SenderID] = msg
@@ -137,7 +146,15 @@ func main() {
 				PrintOrderMatrix(msg)
 				runCost = true
 			}
-
+		case <-watchdogTicker.C:
+			for id, lastTime := range lastSeen {
+				if cab1.AliveNodes[id] && time.Since(lastTime) > nodeTimeout {
+					cab1.AliveNodes[id] = false // marker som død
+					fmt.Printf("Watchdog: Node %s timed out! Marking as dead.\n", id)
+					delete(OtherNodes, id) // fjern fra othernodes liste cost funk bruker
+					runCost = true         // beregn på nytt
+				}
+			}
 		case a := <-drv_obstr: //Obstruksjonsbryter
 			fmt.Printf("%+v\n", a)
 			if a {
