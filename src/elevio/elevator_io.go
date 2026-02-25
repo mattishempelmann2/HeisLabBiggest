@@ -309,7 +309,7 @@ func (e *Elevator) SteinSaksPapir(Node ElevatorStatus) { //Utfører steinsakspap
 				e.OrderListHall[i][j] = Order_Pending
 			case (e.OrderListHall[i][j] == Order_Pending) && ((Node.OrderListHall[i][j] == Order_Pending) || (Node.OrderListHall[i][j] == Order_Active)): // Ordre er pending, får enten pending eller aktiv fra annen node -> aktiv
 				e.OrderListHall[i][j] = Order_Active
-				//e.SetButtonLamp(ButtonType(j), i, true) // noe av det dummeste jeg har sett, caste i som er en int til buttontype som er en int
+				e.SetButtonLamp(ButtonType(j), i, true) // noe av det dummeste jeg har sett, caste i som er en int til buttontype som er en int
 			case (e.OrderListHall[i][j] == Order_Active) && (Node.OrderListHall[i][j] == Order_Inactive): // Ordre er aktiv, blir utført annen node->satt inaktiv der = inaktiv her
 				e.OrderListHall[i][j] = Order_Inactive
 				e.SetButtonLamp(ButtonType(j), i, false)
@@ -375,7 +375,12 @@ func (e *Elevator) UpdateBehaviour() {
 func (e *Elevator) UpdateHallLights() {
 	for f := 0; f < 4; f++ {
 		for b := 0; b < 2; b++ {
-			e.SetButtonLamp(ButtonType(b), f, e.AssignedOrders[f][b])
+			if e.OrderListHall[f][b] == Order_Active {
+				e.SetButtonLamp(ButtonType(b), f, true) // holder lys up to date
+			} else {
+				e.SetButtonLamp(ButtonType(b), f, false) // skrur av lys etter reset, dersom ordre tatt av annen heis i mellomtiden
+			}
+
 		}
 	}
 }
