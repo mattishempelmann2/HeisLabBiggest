@@ -53,9 +53,10 @@ type ButtonEvent struct {
 }
 
 type Elevator struct {
-	OrderListHall [4][2]OrderStatus
-	OrderListCab  [4]OrderStatus
-	CabBackupMap  map[string][4]OrderStatus
+	OrderListHall  [4][2]OrderStatus
+	OrderListCab   [4]OrderStatus
+	CabBackupMap   map[string][4]OrderStatus
+	AssignedOrders [4][2]bool //orders assigned by costfunk
 
 	Floor         int
 	Direction     MotorDirection
@@ -133,9 +134,10 @@ func (e *Elevator) UpdateDirection(Direction MotorDirection) {
 }
 
 func (e *Elevator) HasOrderAbove() bool {
-	for i := e.Floor + 1; i < _numFloors; i++ {
-		for j := 0; j < 2; j++ {
-			if (e.OrderListHall[i][j] == Order_Active) || (e.OrderListCab[i] == Order_Active) {
+	for f := e.Floor + 1; f < _numFloors; f++ {
+		for b := 0; b < 2; b++ {
+			if e.AssignedOrders[f][b] || (e.OrderListCab[f] == Order_Active) {
+				e.SetButtonLamp(ButtonType(b), f, true)
 				return true
 			}
 		}
@@ -145,9 +147,10 @@ func (e *Elevator) HasOrderAbove() bool {
 }
 
 func (e *Elevator) HasOrderBelow() bool {
-	for i := e.Floor - 1; i >= 0; i-- {
-		for j := 0; j < 2; j++ {
-			if (e.OrderListHall[i][j] == Order_Active) || (e.OrderListCab[i] == Order_Active) {
+	for f := e.Floor - 1; f >= 0; f-- {
+		for b := 0; b < 2; b++ {
+			if e.AssignedOrders[f][b] || (e.OrderListCab[f] == Order_Active) {
+				e.SetButtonLamp(ButtonType(b), f, true)
 				return true
 			}
 		}
@@ -157,8 +160,9 @@ func (e *Elevator) HasOrderBelow() bool {
 }
 
 func (e *Elevator) FloorOrder() bool {
-	for i := 0; i < 2; i++ {
-		if e.OrderListHall[e.Floor][i] == Order_Active {
+	for b := 0; b < 2; b++ {
+		if e.AssignedOrders[e.Floor][b] {
+			e.SetButtonLamp(ButtonType(b), e.Floor, true)
 			return true
 		}
 	}
@@ -171,7 +175,7 @@ func (e *Elevator) FloorOrder() bool {
 func (e *Elevator) ActiveOrders() bool { //needed for PollFloorSensor
 	for i := 0; i < _numFloors; i++ {
 		for j := 0; j < 2; j++ {
-			if (e.OrderListHall[i][j] == Order_Active) || (e.OrderListCab[i] == Order_Active) {
+			if e.AssignedOrders[i][j] || (e.OrderListCab[i] == Order_Active) {
 				return true
 			}
 		}
@@ -179,7 +183,7 @@ func (e *Elevator) ActiveOrders() bool { //needed for PollFloorSensor
 	return false
 }
 
-func (e *Elevator) ClearOrderFloor() { // mulig ikke lur måte å gjøre det på
+func (e *Elevator) ClearOrderFloor() { // mulig ikke lur måte å gjøre det på, rettelse funker clearer i GLOBAL hall orders slik at cost funksjon clearer lokal
 	for i := 0; i < 2; i++ {
 		if e.OrderListHall[e.Floor][i] == Order_Active {
 			e.OrderListHall[e.Floor][i] = Order_Inactive
@@ -189,16 +193,6 @@ func (e *Elevator) ClearOrderFloor() { // mulig ikke lur måte å gjøre det på
 	if e.OrderListCab[e.Floor] == Order_Active {
 		e.OrderListCab[e.Floor] = Order_Inactive
 		e.SetButtonLamp(ButtonType(2), e.Floor, false)
-	}
-}
-
-func (e *Elevator) ClearOrderHallBtn() { // mulig ikke lur måte å gjøre det på
-	for i := 0; i < 2; i++ {
-		if e.OrderListHall[e.Floor][i] == Order_Active {
-			e.OrderListHall[e.Floor][i] = Order_Inactive
-			e.SetButtonLamp(ButtonType(i), e.Floor, false)
-		}
-
 	}
 }
 
@@ -229,6 +223,7 @@ func (e *Elevator) StoppFloor() {
 	e.DoorOpen = true
 	e.SetDoorOpenLamp(true)
 	e.ClearOrderFloor()
+
 }
 
 func (e *Elevator) ExecuteOrder() { // må kanskje forkaste hele denne til fordel for en GoToFloor funksjon, siden cost funksjon assigner ordre til heis
@@ -237,15 +232,15 @@ func (e *Elevator) ExecuteOrder() { // må kanskje forkaste hele denne til forde
 		switch {
 		case e.OrderListCab[e.Floor] == Order_Active: // knapp cab
 			e.StoppFloor()
-		case (e.Direction == 1) && (e.OrderListHall[e.Floor][0] == Order_Active): //på tur oppover og knapp hall opp
+		case (e.Direction == 1) && e.AssignedOrders[e.Floor][0]: //på tur oppover og knapp hall opp
 			e.StoppFloor()
-		case e.Direction == -1 && (e.OrderListHall[e.Floor][1] == Order_Active): // tur nedover knapp hall ned
+		case e.Direction == -1 && e.AssignedOrders[e.Floor][1]: // tur nedover knapp hall ned
 			e.StoppFloor()
-		case e.Direction == 0 && ((e.OrderListHall[e.Floor][1] == Order_Active) || (e.OrderListHall[e.Floor][0] == Order_Active)): // står i ro, hall up/down åpen dør
+		case e.Direction == 0 && (e.AssignedOrders[e.Floor][1] || e.AssignedOrders[e.Floor][0]): // står i ro, hall up/down åpen dør
 			e.StoppFloor()
-		case (e.Direction == -1) && (e.OrderListHall[e.Floor][0] == Order_Active) && (!e.HasOrderBelow()):
+		case (e.Direction == -1) && e.AssignedOrders[e.Floor][0] && (!e.HasOrderBelow()):
 			e.StoppFloor()
-		case (e.Direction == 1) && (e.OrderListHall[e.Floor][1] == Order_Active) && (!e.HasOrderAbove()):
+		case (e.Direction == 1) && e.AssignedOrders[e.Floor][1] && (!e.HasOrderAbove()):
 			e.StoppFloor()
 
 		default:
@@ -317,10 +312,10 @@ func (e *Elevator) SteinSaksPapir(Node ElevatorStatus) { //Utfører steinsakspap
 				e.OrderListHall[i][j] = Order_Pending
 			case (e.OrderListHall[i][j] == Order_Pending) && ((Node.OrderListHall[i][j] == Order_Pending) || (Node.OrderListHall[i][j] == Order_Active)): // Ordre er pending, får enten pending eller aktiv fra annen node -> aktiv
 				e.OrderListHall[i][j] = Order_Active
-				e.SetButtonLamp(ButtonType(j), i, true) // noe av det dummeste jeg har sett, caste i som er en int til buttontype som er en int
+				//e.SetButtonLamp(ButtonType(j), i, true) // noe av det dummeste jeg har sett, caste i som er en int til buttontype som er en int
 			case (e.OrderListHall[i][j] == Order_Active) && (Node.OrderListHall[i][j] == Order_Inactive): // Ordre er aktiv, blir utført annen node->satt inaktiv der = inaktiv her
 				e.OrderListHall[i][j] = Order_Inactive
-				e.SetButtonLamp(ButtonType(j), i, false)
+				//e.SetButtonLamp(ButtonType(j), i, false)
 			default: // legge til noe her? Usikker hva default case burde være
 				continue
 			}

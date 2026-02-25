@@ -56,27 +56,25 @@ func makeHRAElevState(Node any) HRAElevState {
 	return *elevState
 }
 
-func MakeHRAInput(localNode elevio.Elevator, Node1 elevio.ElevatorStatus, Node2 elevio.ElevatorStatus) HRAInput {
+func MakeHRAInput(localNode elevio.Elevator, otherNodes map[string]elevio.ElevatorStatus) HRAInput {
 	HRAInput := &HRAInput{}
 	HRAInput.States = make(map[string]HRAElevState)
-
-	localHRA := makeHRAElevState(localNode)
-	externalHRA1 := makeHRAElevState(Node1)
-	externalHRA2 := makeHRAElevState(Node2)
 
 	for floor := 0; floor < 4; floor++ {
 		for button := 0; button < 2; button++ {
 			HRAInput.HallRequests[floor][button] = OrderBoolMap[localNode.OrderListHall[floor][button]]
 		}
 	}
-	HRAInput.States[localNode.ID] = localHRA
-	HRAInput.States[Node1.SenderID] = externalHRA1
-	HRAInput.States[Node2.SenderID] = externalHRA2
+
+	HRAInput.States[localNode.ID] = makeHRAElevState(localNode)
+	for id, status := range otherNodes {
+		HRAInput.States[id] = makeHRAElevState(status)
+	}
 
 	return *HRAInput
 }
 
-func CostFunc(input HRAInput) {
+func CostFunc(input HRAInput) map[string][4][2]bool {
 
 	hraExecutable := ""
 	switch runtime.GOOS {
@@ -84,6 +82,8 @@ func CostFunc(input HRAInput) {
 		hraExecutable = "hall_request_assigner"
 	case "windows":
 		hraExecutable = "hall_request_assigner.exe"
+	case "darwin":
+		hraExecutable = "hall_request_assigner_mac"
 	default:
 		panic("OS not supported")
 	}
@@ -91,25 +91,26 @@ func CostFunc(input HRAInput) {
 	jsonBytes, err := json.Marshal(input)
 	if err != nil {
 		fmt.Println("json.Marshal error: ", err)
-		return
+		return nil
 	}
 
 	ret, err := exec.Command("./cost_fns/hall_request_assigner/"+hraExecutable, "-i", string(jsonBytes)).CombinedOutput()
 	if err != nil {
 		fmt.Println("exec.Command error: ", err)
 		fmt.Println(string(ret))
-		return
+		return nil
 	}
 
-	output := new(map[string][][2]bool)
+	output := new(map[string][4][2]bool)
 	err = json.Unmarshal(ret, &output)
 	if err != nil {
 		fmt.Println("json.Unmarshal error: ", err)
-		return
+		return nil
 	}
+	return *output
 
-	fmt.Printf("output: \n")
+	/*fmt.Printf("output: \n")
 	for k, v := range *output {
 		fmt.Printf("%6v :  %+v\n", k, v)
-	}
+	}*/
 }

@@ -36,12 +36,9 @@ func PrintOrderMatrix(e elevio.ElevatorStatus) {
 }
 
 func main() {
-	//lastSeenMapMsgID := make(map[string]int)
-	//lastSeenOrderHall := make(map[string][4][2]elevio.OrderStatus) // hjelpevariabel for print funksjon
-	//lastSeenOrderCab := make(map[string][4]elevio.OrderStatus)     //
 	OtherNodes := make(map[string]elevio.ElevatorStatus)
 
-	localID := 15656 // bruke noe
+	localID := 15657 // bruke noe
 
 	StatusTx := make(chan elevio.ElevatorStatus) //channel med status
 	StatusRx := make(chan elevio.ElevatorStatus)
@@ -75,11 +72,13 @@ func main() {
 	doorTimer.Stop()                            // Timer starter når definert, stoppe så den ikke fucker opp states
 
 	for {
+		runCost := false
+
 		select {
 		case a := <-drv_buttons: //knappetrykk
 			cab1.UpdateElevatorOrder(a)
 			BtnPress <- true
-
+			runCost = true
 		case a := <-drv_floors: //etasjeupdate
 			cab1.SetFloorIndicator(a)
 			cab1.UpdateFloor(a)
@@ -91,21 +90,29 @@ func main() {
 					doorTimer.Reset(3 * time.Second)
 				}
 			}
+			runCost = true
 
 		case <-doorTimer.C: //timer etter dør åpen
 			fmt.Printf("Door closing \n")
 			cab1.DoorOpen = false
 			cab1.SetDoorOpenLamp(false)
 			cab1.ExecuteOrder()
+			runCost = true
 
 		case <-sendTicker.C: //Periodisk statusupdate
+			cabBackUpCopy := make(map[string][4]elevio.OrderStatus)
+
+			for key, value := range cab1.CabBackupMap {
+				cabBackUpCopy[key] = value
+			}
+
 			msg := elevio.ElevatorStatus{ //Lager statusmelding
 				SenderID:      address,
 				CurrentFloor:  cab1.Floor,
 				Direction:     int(cab1.Direction),
 				OrderListHall: cab1.OrderListHall,
 				OrderListCab:  cab1.OrderListCab,
-				CabBackupMap:  cab1.CabBackupMap,
+				CabBackupMap:  cabBackUpCopy,
 				MsgID:         cab1.MsgCount,
 				DoorOpen:      cab1.DoorOpen, //bruke counter som MsgID
 				Behaviour:     cab1.Behaviour,
@@ -121,17 +128,15 @@ func main() {
 			cab1.CabBackupFunc(msg)  // back up cab orders fra melding mottat
 			cab1.SteinSaksPapir(msg) // hvis ikke egen eller gammel melding, gjør steinsakspapir algebra
 
-			//lastSeenMapMsgID[msg.SenderID] = msg.MsgID // oppdater sist sett.
 			cab1.AliveNodes[msg.SenderID] = true // denne noden lever, sett som true
 
-			//fmt.Printf("Received message from %d at floor %d \n", msg.SenderID, msg.CurrentFloor)
-			if (msg.OrderListHall != OtherNodes[msg.SenderID].OrderListHall) || (msg.OrderListCab != OtherNodes[msg.SenderID].OrderListCab) { // kun print ved endring, slipper spam
-				PrintOrderMatrix(msg)
-				cost.CostFunc(cost.MakeHRAInput(*cab1, OtherNodes["localhost:15657"], OtherNodes["localhost:15655"]))
-				//lastSeenOrderHall[msg.SenderID] = msg.OrderListHall
-				//lastSeenOrderCab[msg.SenderID] = msg.OrderListCab
-			}
+			stateChanged := (msg.OrderListHall != OtherNodes[msg.SenderID].OrderListHall) || (msg.OrderListCab != OtherNodes[msg.SenderID].OrderListCab) // Sjekk om state changed, sparer print og beregning
 			OtherNodes[msg.SenderID] = msg
+
+			if stateChanged { // kun print ved endring, slipper spam
+				PrintOrderMatrix(msg)
+				runCost = true
+			}
 
 		case a := <-drv_obstr: //Obstruksjonsbryter
 			fmt.Printf("%+v\n", a)
@@ -148,6 +153,9 @@ func main() {
 					cab1.SetButtonLamp(b, f, false)
 				}
 			}
+		}
+		if runCost {
+			cab1.AssignedOrders = cost.CostFunc(cost.MakeHRAInput(*cab1, OtherNodes))[address]
 		}
 	}
 }
