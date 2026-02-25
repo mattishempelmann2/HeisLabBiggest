@@ -35,9 +35,10 @@ func PrintOrderMatrix(e elevio.ElevatorStatus) {
 }
 
 func main() {
-	lastSeenMapMsgID := make(map[string]int)
-	lastSeenOrderHall := make(map[string][4][2]elevio.OrderStatus) // hjelpevariabel for print funksjon
-	lastSeenOrderCab := make(map[string][4]elevio.OrderStatus)     //
+	//lastSeenMapMsgID := make(map[string]int)
+	//lastSeenOrderHall := make(map[string][4][2]elevio.OrderStatus) // hjelpevariabel for print funksjon
+	//lastSeenOrderCab := make(map[string][4]elevio.OrderStatus)     //
+	OtherNodes := make(map[string]elevio.ElevatorStatus)
 
 	localID := 15657 // bruke noe
 
@@ -106,27 +107,29 @@ func main() {
 				CabBackupMap:  cab1.CabBackupMap,
 				MsgID:         cab1.MsgCount,
 				DoorOpen:      cab1.DoorOpen, //bruke counter som MsgID
+				Behaviour:     cab1.Behaviour,
 			}
 			StatusTx <- msg //sende
 			cab1.MsgCount++
 
 		case msg := <-StatusRx: //Mottar status update
-			if (msg.SenderID == address) || msg.MsgID < lastSeenMapMsgID[msg.SenderID] {
+			if (msg.SenderID == address) || msg.MsgID < OtherNodes[msg.SenderID].MsgID {
 				continue
 			}
 
-			cab1.CabBackupFunc(msg)
+			cab1.CabBackupFunc(msg)  // back up cab orders fra melding mottat
 			cab1.SteinSaksPapir(msg) // hvis ikke egen eller gammel melding, gjør steinsakspapir algebra
 
-			lastSeenMapMsgID[msg.SenderID] = msg.MsgID // oppdater sist sett.
-			cab1.AliveNodes[msg.SenderID] = true       // denne noden lever, sett som true
+			//lastSeenMapMsgID[msg.SenderID] = msg.MsgID // oppdater sist sett.
+			cab1.AliveNodes[msg.SenderID] = true // denne noden lever, sett som true
 
 			//fmt.Printf("Received message from %d at floor %d \n", msg.SenderID, msg.CurrentFloor)
-			if (msg.OrderListHall != lastSeenOrderHall[msg.SenderID]) || (msg.OrderListCab != lastSeenOrderCab[msg.SenderID]) { // kun print ved endring, slipper spam
+			if (msg.OrderListHall != OtherNodes[msg.SenderID].OrderListHall) || (msg.OrderListCab != OtherNodes[msg.SenderID].OrderListCab) { // kun print ved endring, slipper spam
 				PrintOrderMatrix(msg)
-				lastSeenOrderHall[msg.SenderID] = msg.OrderListHall
-				lastSeenOrderCab[msg.SenderID] = msg.OrderListCab
+				//lastSeenOrderHall[msg.SenderID] = msg.OrderListHall
+				//lastSeenOrderCab[msg.SenderID] = msg.OrderListCab
 			}
+			OtherNodes[msg.SenderID] = msg
 
 		case a := <-drv_obstr: //Obstruksjonsbryter
 			fmt.Printf("%+v\n", a)

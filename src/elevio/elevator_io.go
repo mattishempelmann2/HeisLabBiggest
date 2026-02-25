@@ -56,24 +56,30 @@ type Elevator struct {
 	OrderListHall [4][2]OrderStatus
 	OrderListCab  [4]OrderStatus
 	CabBackupMap  map[string][4]OrderStatus
-	Floor         int
-	Retning       MotorDirection
-	PrevRetning   MotorDirection
-	DoorOpen      bool
-	AliveNodes    map[string]bool
-	ID            string
-	MsgCount      int
+
+	Floor       int
+	Retning     MotorDirection
+	PrevRetning MotorDirection
+	DoorOpen    bool
+	Behaviour   string
+
+	AliveNodes map[string]bool
+	ID         string
+	MsgCount   int
 }
 
 type ElevatorStatus struct { //det som sendes, health checks
-	SenderID      string
-	CurrentFloor  int
-	Direction     int
+	SenderID     string
+	CurrentFloor int
+	Direction    int
+	DoorOpen     bool
+	Behaviour    string
+
 	OrderListHall [4][2]OrderStatus
 	OrderListCab  [4]OrderStatus
 	CabBackupMap  map[string][4]OrderStatus
-	MsgID         int //For å holde styr på rekkefølge, forkaste gamle meldinger
-	DoorOpen      bool
+
+	MsgID int //For å holde styr på rekkefølge, forkaste gamle meldinger
 }
 
 type OrderStatus int
@@ -87,6 +93,7 @@ const (
 func (e *Elevator) SetMotorDirection(dir MotorDirection) {
 	write([4]byte{1, byte(dir), 0, 0})
 	e.UpdateRetning(dir)
+	e.UpdateBehaviour()
 }
 
 func (e *Elevator) SetButtonLamp(button ButtonType, floor int, value bool) {
@@ -99,6 +106,7 @@ func (e *Elevator) SetFloorIndicator(floor int) {
 
 func (e *Elevator) SetDoorOpenLamp(value bool) {
 	write([4]byte{4, toByte(value), 0, 0})
+	e.UpdateBehaviour()
 }
 
 func (e *Elevator) SetStopLamp(value bool) {
@@ -194,17 +202,6 @@ func (e *Elevator) ClearOrderHallBtn() { // mulig ikke lur måte å gjøre det p
 	}
 }
 
-func (e *Elevator) DriveTo(floor int) { // fjern
-	for e.Floor != floor {
-		switch {
-		case floor > e.Floor:
-			e.SetMotorDirection(1)
-
-		}
-
-	}
-}
-
 func (e *Elevator) CabInit(ID string) {
 	for GetFloor() != 0 {
 		e.SetMotorDirection(MD_Down)
@@ -214,6 +211,7 @@ func (e *Elevator) CabInit(ID string) {
 	e.Floor = 0
 	e.PrevRetning = 0
 	e.Retning = 0
+	e.DoorOpen = false
 	e.SetDoorOpenLamp(false)
 	e.AliveNodes = make(map[string]bool)
 	e.CabBackupMap = make(map[string][4]OrderStatus)
@@ -364,6 +362,17 @@ func (e *Elevator) CabBackupFunc(Node ElevatorStatus) {
 
 	}
 	e.CabBackupMap[Node.SenderID] = CabBackup // skriver ny status til map
+}
+
+func (e *Elevator) UpdateBehaviour() {
+	switch {
+	case e.DoorOpen:
+		e.Behaviour = "doorOpen"
+	case e.Retning != 0:
+		e.Behaviour = "moving"
+	default:
+		e.Behaviour = "idle"
+	}
 }
 
 func PollButtons(receiver chan<- ButtonEvent) {
