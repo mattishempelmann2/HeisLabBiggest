@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	cost "heis/src/cost_func"
 	"heis/src/elevio"
 	"heis/src/network/bcast"
 	"time"
@@ -11,23 +12,34 @@ func PrintOrderMatrix(e elevio.ElevatorStatus) {
 	fmt.Printf("   %s  %s  %s\n", "Up", "Dn", "Cab") // Header (Optional)
 	for f := 0; f < 4; f++ {
 		fmt.Printf("F%d ", f)
-		for b := 0; b < 3; b++ {
+		for b := 0; b < 2; b++ {
 			switch {
-			case e.OrderList[f][b] == elevio.Order_Active:
+			case e.OrderListHall[f][b] == elevio.Order_Active:
 				fmt.Printf("[%s] ", "X")
-			case e.OrderList[f][b] == elevio.Order_Pending:
+			case e.OrderListHall[f][b] == elevio.Order_Pending:
 				fmt.Printf("[%s] ", "P")
 			default:
 				fmt.Printf("[%s] ", " ")
 			}
 		}
+		switch {
+		case e.OrderListCab[f] == elevio.Order_Active:
+			fmt.Printf("[%s] ", "X")
+		case e.OrderListCab[f] == elevio.Order_Pending:
+			fmt.Printf("[%s] ", "P")
+		default:
+			fmt.Printf("[%s] ", " ")
+		}
 		fmt.Printf("\n")
 	}
+	fmt.Printf("msgID: %d, from NodeID: %s \n", e.MsgID, e.SenderID)
 }
 
 func main() {
-	lastSeenMapMsgID := make(map[string]int)
-	lastSeenOrder := make(map[string][4][3]elevio.OrderStatus) // hjelpevariabel for print funksjon
+	OtherNodes := make(map[string]elevio.ElevatorStatus)
+	lastSeen := make(map[string]time.Time) //map for å notere når node_x sist sett
+	watchdogTicker := time.NewTicker(500 * time.Millisecond)
+	nodeTimeout := 3 * time.Second
 
 	localID := 15657 // bruke noe
 
@@ -63,11 +75,13 @@ func main() {
 	doorTimer.Stop()                            // Timer starter når definert, stoppe så den ikke fucker opp states
 
 	for {
+		runCost := false
+
 		select {
 		case a := <-drv_buttons: //knappetrykk
 			cab1.UpdateElevatorOrder(a)
 			BtnPress <- true
-
+			runCost = true
 		case a := <-drv_floors: //etasjeupdate
 			cab1.SetFloorIndicator(a)
 			cab1.UpdateFloor(a)
@@ -79,44 +93,68 @@ func main() {
 					doorTimer.Reset(3 * time.Second)
 				}
 			}
+			runCost = true
 
 		case <-doorTimer.C: //timer etter dør åpen
 			fmt.Printf("Door closing \n")
 			cab1.DoorOpen = false
 			cab1.SetDoorOpenLamp(false)
 			cab1.ExecuteOrder()
+			runCost = true
 
 		case <-sendTicker.C: //Periodisk statusupdate
+			cabBackUpCopy := make(map[string][4]elevio.OrderStatus)
+
+			for key, value := range cab1.CabBackupMap {
+				cabBackUpCopy[key] = value
+			}
+
 			msg := elevio.ElevatorStatus{ //Lager statusmelding
-				SenderID:     address,
-				CurrentFloor: cab1.Floor,
-				Direction:    int(cab1.Retning),
-				OrderList:    cab1.OrderList,
-				CabBackupMap: cab1.CabBackupMap,
-				MsgID:        cab1.MsgCount,
-				DoorOpen:     cab1.DoorOpen, //bruke counter som MsgID
+				SenderID:      address,
+				CurrentFloor:  cab1.Floor,
+				Direction:     int(cab1.Direction),
+				OrderListHall: cab1.OrderListHall,
+				OrderListCab:  cab1.OrderListCab,
+				CabBackupMap:  cabBackUpCopy,
+				MsgID:         cab1.MsgCount,
+				DoorOpen:      cab1.DoorOpen, //bruke counter som MsgID
+				Behaviour:     cab1.Behaviour,
 			}
 			StatusTx <- msg //sende
 			cab1.MsgCount++
 
 		case msg := <-StatusRx: //Mottar status update
-			if (msg.SenderID == address) || msg.MsgID < lastSeenMapMsgID[msg.SenderID] {
+			if (msg.SenderID == address) || msg.MsgID < OtherNodes[msg.SenderID].MsgID {
 				continue
 			}
 
-			cab1.CabBackupFunc(msg)
-			cab1.SteinSaksPapir(msg) // hvis ikke egen eller gammel melding, gjør steinsakspapir algebra
+			lastSeen[msg.SenderID] = time.Now()
 
-			lastSeenMapMsgID[msg.SenderID] = msg.MsgID // oppdater sist sett.
-			cab1.AliveNodes[msg.SenderID] = true       // denne noden lever, sett som true
-
-			//fmt.Printf("Received message from %d at floor %d \n", msg.SenderID, msg.CurrentFloor)
-			if msg.OrderList != lastSeenOrder[msg.SenderID] { // kun print ved endring, slipper spam
-				PrintOrderMatrix(msg)
-				fmt.Printf("msgID: %d \n", msg.MsgID)
-				lastSeenOrder[msg.SenderID] = msg.OrderList
+			if !cab1.AliveNodes[msg.SenderID] {
+				cab1.AliveNodes[msg.SenderID] = true // setter true dersom den ikke er det
+				fmt.Printf("Node %s connected \n", msg.SenderID)
+				runCost = true //beregn på nytt, har fått ny node i systemet
 			}
 
+			cab1.CabBackupFunc(msg)  // back up cab orders fra melding mottat
+			cab1.SteinSaksPapir(msg) // hvis ikke egen eller gammel melding, gjør steinsakspapir algebra
+
+			stateChanged := (msg.OrderListHall != OtherNodes[msg.SenderID].OrderListHall) || (msg.OrderListCab != OtherNodes[msg.SenderID].OrderListCab) // Sjekk om state changed, sparer print og beregning
+			OtherNodes[msg.SenderID] = msg
+
+			if stateChanged { // kun print ved endring, slipper spam
+				PrintOrderMatrix(msg)
+				runCost = true
+			}
+		case <-watchdogTicker.C:
+			for id, lastTime := range lastSeen {
+				if cab1.AliveNodes[id] && time.Since(lastTime) > nodeTimeout {
+					cab1.AliveNodes[id] = false // marker som død
+					fmt.Printf("Watchdog: Node %s timed out! Marking as dead.\n", id)
+					delete(OtherNodes, id) // fjern fra othernodes liste cost funk bruker
+					runCost = true         // beregn på nytt
+				}
+			}
 		case a := <-drv_obstr: //Obstruksjonsbryter
 			fmt.Printf("%+v\n", a)
 			if a {
@@ -132,6 +170,10 @@ func main() {
 					cab1.SetButtonLamp(b, f, false)
 				}
 			}
+		}
+		if runCost {
+			cab1.AssignedOrders = cost.CostFunc(cost.MakeHRAInput(*cab1, OtherNodes))[address] // mp fikse slik at den ikke bruker døde nodes i beregning
+			cab1.UpdateHallLights()
 		}
 	}
 }
