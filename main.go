@@ -108,7 +108,7 @@ func main() {
 		case <-sendTicker.C: //Periodisk statusupdate
 			cabBackUpCopy := make(map[string][4]elevio.OrderStatus)
 
-			for key, value := range cab1.CabBackupMap {
+			for key, value := range cab1.CabBackupMap { //tar deep copy, denne kjører fullstendig i denne casen, gjør at programm ikke kræsjer ved sending samtidig som knappetrykk
 				cabBackUpCopy[key] = value
 			}
 

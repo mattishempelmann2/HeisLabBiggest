@@ -210,11 +210,6 @@ func (e *Elevator) CabInit(ID string) {
 	e.MsgCount = 0
 }
 
-func (e *Elevator) DoorTimer(SendDone chan<- bool) { // ikke i bruk, fjern! Veldig dårlig løsning
-	time.Sleep(3 * time.Second)
-	SendDone <- true
-}
-
 func (e *Elevator) StoppFloor() {
 	e.SetMotorDirection(0)
 	e.DoorOpen = true
