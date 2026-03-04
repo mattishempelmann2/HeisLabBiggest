@@ -211,11 +211,24 @@ func (e *Elevator) ClearOrderFloor() { // mulig ikke lur måte å gjøre det på
 			e.OrderListHall[e.Floor][BT_HallUp] = Order_Inactive
 			e.SetButtonLamp(BT_HallUp, e.Floor, false)
 		}
-	default:
-		for button := 0; button < 2; button++ {
-			if e.OrderListHall[e.Floor][button] == Order_Active && e.AssignedOrders[e.Floor][button] {
-				e.OrderListHall[e.Floor][button] = Order_Inactive
-				e.SetButtonLamp(ButtonType(button), e.Floor, false)
+	case MD_Stop:
+		if e.HasOrderAbove() {
+			if e.OrderListHall[e.Floor][BT_HallUp] == Order_Active && e.AssignedOrders[e.Floor][BT_HallUp] {
+				e.OrderListHall[e.Floor][BT_HallUp] = Order_Inactive
+				e.SetButtonLamp(BT_HallUp, e.Floor, false)
+			}
+		} else if e.HasOrderBelow() {
+			if e.OrderListHall[e.Floor][BT_HallDown] == Order_Active && e.AssignedOrders[e.Floor][BT_HallDown] {
+				e.OrderListHall[e.Floor][BT_HallDown] = Order_Inactive
+				e.SetButtonLamp(BT_HallDown, e.Floor, false)
+			}
+		} else {
+			if e.OrderListHall[e.Floor][BT_HallUp] == Order_Active && e.AssignedOrders[e.Floor][BT_HallUp] {
+				e.OrderListHall[e.Floor][BT_HallUp] = Order_Inactive
+				e.SetButtonLamp(BT_HallUp, e.Floor, false)
+			} else if e.OrderListHall[e.Floor][BT_HallDown] == Order_Active && e.AssignedOrders[e.Floor][BT_HallDown] {
+				e.OrderListHall[e.Floor][BT_HallDown] = Order_Inactive
+				e.SetButtonLamp(BT_HallDown, e.Floor, false)
 			}
 		}
 	}
