@@ -58,8 +58,6 @@ func main() {
 	cab1 := &elevio.Elevator{}
 	cab1.CabInit(address) //Init func
 
-	var d elevio.MotorDirection = elevio.MD_Up // fjern etter hvert
-
 	drv_buttons := make(chan elevio.ButtonEvent)
 	drv_floors := make(chan int)
 	drv_obstr := make(chan bool)
@@ -158,13 +156,9 @@ func main() {
 					runCost = true         // beregn på nytt
 				}
 			}
-		case a := <-drv_obstr: //Obstruksjonsbryter
-			fmt.Printf("%+v\n", a)
-			if a {
-				cab1.SetMotorDirection(elevio.MD_Stop)
-			} else {
-				cab1.SetMotorDirection(d)
-			}
+		case <-drv_obstr: //Obstruksjonsbryter
+			cab1.Obstructed = !cab1.Obstructed
+			fmt.Printf("Obstruction: %v \n", cab1.Obstructed)
 
 		case a := <-drv_stop: //stop bryter
 			fmt.Printf("%+v\n", a)

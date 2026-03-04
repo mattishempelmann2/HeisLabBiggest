@@ -63,6 +63,7 @@ type Elevator struct {
 	PrevDirection MotorDirection
 	DoorOpen      bool
 	Behaviour     string
+	Obstructed    bool
 
 	AliveNodes map[string]bool
 	ID         string
@@ -181,10 +182,10 @@ func (e *Elevator) ActiveOrders() bool { //needed for PollFloorSensor
 }
 
 func (e *Elevator) ClearOrderFloor() { // mulig ikke lur måte å gjøre det på, rettelse funker clearer i GLOBAL hall orders slik at cost funksjon clearer lokal
-	for i := 0; i < 2; i++ {
-		if e.OrderListHall[e.Floor][i] == Order_Active {
-			e.OrderListHall[e.Floor][i] = Order_Inactive
-			e.SetButtonLamp(ButtonType(i), e.Floor, false)
+	for button := 0; button < 2; button++ {
+		if e.OrderListHall[e.Floor][button] == Order_Active && e.AssignedOrders[e.Floor][button] {
+			e.OrderListHall[e.Floor][button] = Order_Inactive
+			e.SetButtonLamp(ButtonType(button), e.Floor, false)
 		}
 	}
 	if e.OrderListCab[e.Floor] == Order_Active {
@@ -208,6 +209,7 @@ func (e *Elevator) CabInit(ID string) {
 	e.CabBackupMap = make(map[string][4]OrderStatus)
 	e.ID = ID
 	e.MsgCount = 0
+	e.Obstructed = false
 }
 
 func (e *Elevator) StoppFloor() {
