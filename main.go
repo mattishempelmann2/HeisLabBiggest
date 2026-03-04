@@ -94,12 +94,17 @@ func main() {
 			runCost = true
 
 		case <-doorTimer.C: //timer etter dør åpen
-			fmt.Printf("Door closing \n")
-			cab1.DoorOpen = false
-			cab1.SetDoorOpenLamp(false)
-			cab1.ExecuteOrder2()
-			if cab1.DoorOpen {
-				doorTimer.Reset(3 * time.Second) // Viktig siden, hvis vi har cab order til 0.etasje etter reboot, blir vi stuck uten, da dører åpnes uten å resete timer
+			if cab1.Obstructed {
+				fmt.Printf("Cab obstructed, keeping door open \n")
+				doorTimer.Reset(3 * time.Second)
+			} else {
+				fmt.Printf("Door closing \n")
+				cab1.DoorOpen = false
+				cab1.SetDoorOpenLamp(false)
+				cab1.ExecuteOrder2()
+				if cab1.DoorOpen {
+					doorTimer.Reset(3 * time.Second) // Viktig siden, hvis vi har cab order til 0.etasje etter reboot, blir vi stuck uten, da dører åpnes uten å resete timer
+				}
 			}
 			runCost = true
 
@@ -144,7 +149,7 @@ func main() {
 			OtherNodes[msg.SenderID] = msg                                                                                                               //ta vare på siste msg
 
 			if stateChanged { // kun print/gjør beregning ved endring, slipper spam
-				PrintOrderMatrix(msg)
+				//PrintOrderMatrix(msg)
 				runCost = true
 			}
 		case <-watchdogTicker.C:
@@ -156,9 +161,12 @@ func main() {
 					runCost = true         // beregn på nytt
 				}
 			}
-		case <-drv_obstr: //Obstruksjonsbryter
-			cab1.Obstructed = !cab1.Obstructed
+		case obstruction := <-drv_obstr: //Obstruksjonsbryter
+			cab1.Obstructed = obstruction
 			fmt.Printf("Obstruction: %v \n", cab1.Obstructed)
+			if !obstruction && cab1.DoorOpen {
+				doorTimer.Reset(3 * time.Second)
+			}
 
 		case a := <-drv_stop: //stop bryter
 			fmt.Printf("%+v\n", a)

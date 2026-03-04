@@ -210,7 +210,9 @@ func (e *Elevator) ClearOrderFloor() { // mulig ikke lur måte å gjøre det på
 	if clearUp && upAssigned {
 		e.OrderListHall[e.Floor][BT_HallUp] = Order_Inactive
 		e.SetButtonLamp(BT_HallUp, e.Floor, false)
+		return
 	}
+
 	if clearDown && downAssigned {
 		e.OrderListHall[e.Floor][BT_HallDown] = Order_Inactive
 		e.SetButtonLamp(BT_HallDown, e.Floor, false)
