@@ -182,55 +182,38 @@ func (e *Elevator) ActiveOrders() bool { //needed for PollFloorSensor
 }
 
 func (e *Elevator) ClearOrderFloor() { // mulig ikke lur måte å gjøre det på, rettelse funker clearer i GLOBAL hall orders slik at cost funksjon clearer lokal
-	if e.OrderListCab[e.Floor] == Order_Active {
+	if e.OrderListCab[e.Floor] == Order_Active { //cab orders enkelt og greit
 		e.OrderListCab[e.Floor] = Order_Inactive
 		e.SetButtonLamp(ButtonType(2), e.Floor, false)
 	}
 
-	dir := e.Direction
-	if dir == MD_Stop {
+	upAssigned := e.OrderListHall[e.Floor][BT_HallUp] == Order_Active && e.AssignedOrders[e.Floor][BT_HallUp]       //Har vi hall ordre oppover
+	downAssigned := e.OrderListHall[e.Floor][BT_HallDown] == Order_Active && e.AssignedOrders[e.Floor][BT_HallDown] // Har vi hall ordre nedover
+
+	dir := e.Direction  //hva er retning
+	if dir == MD_Stop { // hvis vi står i ro hvordan kom vi hit.
 		dir = e.PrevDirection
 	}
 
-	switch dir {
-	case MD_Up:
-		if e.OrderListHall[e.Floor][BT_HallUp] == Order_Active && e.AssignedOrders[e.Floor][BT_HallUp] {
-			e.OrderListHall[e.Floor][BT_HallUp] = Order_Inactive
-			e.SetButtonLamp(BT_HallUp, e.Floor, false)
+	clearUp := (dir == MD_Up) || (dir == MD_Down && !e.HasOrderBelow()) || (dir == MD_Stop && e.HasOrderAbove()) //utfør ordre opp om vi var på tur opp/ned men ingen flere ned/ i ro og skal opp
+	clearDown := (dir == MD_Down) || (dir == MD_Up && !e.HasOrderAbove()) || (dir == MD_Stop && e.HasOrderBelow() && !clearUp)
+
+	if dir == MD_Stop && !clearDown && !clearUp { //edge case ved init, hvor noen kommer inn fra hall, ikke trykket cab order enda.
+		if upAssigned {
+			clearUp = true
+		} else if downAssigned {
+			clearDown = true
 		}
-		if !e.HasOrderAbove() && e.OrderListHall[e.Floor][BT_HallDown] == Order_Active && e.AssignedOrders[e.Floor][BT_HallDown] {
-			e.OrderListHall[e.Floor][BT_HallDown] = Order_Inactive
-			e.SetButtonLamp(BT_HallDown, e.Floor, false)
-		}
-	case MD_Down:
-		if e.OrderListHall[e.Floor][BT_HallDown] == Order_Active && e.AssignedOrders[e.Floor][BT_HallDown] {
-			e.OrderListHall[e.Floor][BT_HallDown] = Order_Inactive
-			e.SetButtonLamp(BT_HallDown, e.Floor, false)
-		}
-		if !e.HasOrderBelow() && e.OrderListHall[e.Floor][BT_HallUp] == Order_Active && e.AssignedOrders[e.Floor][BT_HallUp] {
-			e.OrderListHall[e.Floor][BT_HallUp] = Order_Inactive
-			e.SetButtonLamp(BT_HallUp, e.Floor, false)
-		}
-	case MD_Stop:
-		if e.HasOrderAbove() {
-			if e.OrderListHall[e.Floor][BT_HallUp] == Order_Active && e.AssignedOrders[e.Floor][BT_HallUp] {
-				e.OrderListHall[e.Floor][BT_HallUp] = Order_Inactive
-				e.SetButtonLamp(BT_HallUp, e.Floor, false)
-			}
-		} else if e.HasOrderBelow() {
-			if e.OrderListHall[e.Floor][BT_HallDown] == Order_Active && e.AssignedOrders[e.Floor][BT_HallDown] {
-				e.OrderListHall[e.Floor][BT_HallDown] = Order_Inactive
-				e.SetButtonLamp(BT_HallDown, e.Floor, false)
-			}
-		} else {
-			if e.OrderListHall[e.Floor][BT_HallUp] == Order_Active && e.AssignedOrders[e.Floor][BT_HallUp] {
-				e.OrderListHall[e.Floor][BT_HallUp] = Order_Inactive
-				e.SetButtonLamp(BT_HallUp, e.Floor, false)
-			} else if e.OrderListHall[e.Floor][BT_HallDown] == Order_Active && e.AssignedOrders[e.Floor][BT_HallDown] {
-				e.OrderListHall[e.Floor][BT_HallDown] = Order_Inactive
-				e.SetButtonLamp(BT_HallDown, e.Floor, false)
-			}
-		}
+
+	}
+
+	if clearUp && upAssigned {
+		e.OrderListHall[e.Floor][BT_HallUp] = Order_Inactive
+		e.SetButtonLamp(BT_HallUp, e.Floor, false)
+	}
+	if clearDown && downAssigned {
+		e.OrderListHall[e.Floor][BT_HallDown] = Order_Inactive
+		e.SetButtonLamp(BT_HallDown, e.Floor, false)
 	}
 }
 
@@ -239,10 +222,10 @@ func (e *Elevator) CabInit(ID string) {
 		e.SetMotorDirection(MD_Down)
 		time.Sleep(_pollRate)
 	}
-	e.SetMotorDirection(0)
+	e.SetMotorDirection(MD_Stop)
 	e.Floor = 0
-	e.PrevDirection = 0
-	e.Direction = 0
+	e.PrevDirection = MD_Stop
+	e.Direction = MD_Stop
 	e.DoorOpen = false
 	e.SetDoorOpenLamp(false)
 	e.AliveNodes = make(map[string]bool)
