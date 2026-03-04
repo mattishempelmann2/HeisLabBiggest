@@ -182,15 +182,42 @@ func (e *Elevator) ActiveOrders() bool { //needed for PollFloorSensor
 }
 
 func (e *Elevator) ClearOrderFloor() { // mulig ikke lur måte å gjøre det på, rettelse funker clearer i GLOBAL hall orders slik at cost funksjon clearer lokal
-	for button := 0; button < 2; button++ {
-		if e.OrderListHall[e.Floor][button] == Order_Active && e.AssignedOrders[e.Floor][button] {
-			e.OrderListHall[e.Floor][button] = Order_Inactive
-			e.SetButtonLamp(ButtonType(button), e.Floor, false)
-		}
-	}
 	if e.OrderListCab[e.Floor] == Order_Active {
 		e.OrderListCab[e.Floor] = Order_Inactive
 		e.SetButtonLamp(ButtonType(2), e.Floor, false)
+	}
+
+	dir := e.Direction
+	if dir == MD_Stop {
+		dir = e.PrevDirection
+	}
+
+	switch dir {
+	case MD_Up:
+		if e.OrderListHall[e.Floor][BT_HallUp] == Order_Active && e.AssignedOrders[e.Floor][BT_HallUp] {
+			e.OrderListHall[e.Floor][BT_HallUp] = Order_Inactive
+			e.SetButtonLamp(BT_HallUp, e.Floor, false)
+		}
+		if !e.HasOrderAbove() && e.OrderListHall[e.Floor][BT_HallDown] == Order_Active && e.AssignedOrders[e.Floor][BT_HallDown] {
+			e.OrderListHall[e.Floor][BT_HallDown] = Order_Inactive
+			e.SetButtonLamp(BT_HallDown, e.Floor, false)
+		}
+	case MD_Down:
+		if e.OrderListHall[e.Floor][BT_HallDown] == Order_Active && e.AssignedOrders[e.Floor][BT_HallDown] {
+			e.OrderListHall[e.Floor][BT_HallDown] = Order_Inactive
+			e.SetButtonLamp(BT_HallDown, e.Floor, false)
+		}
+		if !e.HasOrderBelow() && e.OrderListHall[e.Floor][BT_HallUp] == Order_Active && e.AssignedOrders[e.Floor][BT_HallUp] {
+			e.OrderListHall[e.Floor][BT_HallUp] = Order_Inactive
+			e.SetButtonLamp(BT_HallUp, e.Floor, false)
+		}
+	default:
+		for button := 0; button < 2; button++ {
+			if e.OrderListHall[e.Floor][button] == Order_Active && e.AssignedOrders[e.Floor][button] {
+				e.OrderListHall[e.Floor][button] = Order_Inactive
+				e.SetButtonLamp(ButtonType(button), e.Floor, false)
+			}
+		}
 	}
 }
 
@@ -220,82 +247,70 @@ func (e *Elevator) StoppFloor() {
 
 }
 
-func (e *Elevator) ExecuteOrder() { // må kanskje forkaste hele denne til fordel for en GoToFloor funksjon, siden cost funksjon assigner ordre til heis
-	switch {
-	case e.FloorOrder():
-		switch {
-		case e.OrderListCab[e.Floor] == Order_Active: // knapp cab
-			e.StoppFloor()
-		case (e.Direction == 1) && e.AssignedOrders[e.Floor][0]: //på tur oppover og knapp hall opp
-			e.StoppFloor()
-		case e.Direction == -1 && e.AssignedOrders[e.Floor][1]: // tur nedover knapp hall ned
-			e.StoppFloor()
-		case e.Direction == 0 && (e.AssignedOrders[e.Floor][1] || e.AssignedOrders[e.Floor][0]): // står i ro, hall up/down åpen dør
-			e.StoppFloor()
-		case (e.Direction == -1) && e.AssignedOrders[e.Floor][0] && (!e.HasOrderBelow()):
-			e.StoppFloor()
-		case (e.Direction == 1) && e.AssignedOrders[e.Floor][1] && (!e.HasOrderAbove()):
-			e.StoppFloor()
-
-		default:
-			e.SetMotorDirection(0) // mulig redundant
+func (e *Elevator) ChooseDirection() MotorDirection {
+	switch e.Direction {
+	case MD_Up:
+		if e.HasOrderAbove() {
+			return MD_Up
+		} else if e.HasOrderBelow() {
+			return MD_Down
 		}
-
-	case e.HasOrderAbove():
-		switch {
-		case e.Direction == 1: // Har odre over er på tur opp -> fortsett opp
-			e.SetMotorDirection(1)
-
-		case e.Direction == -1: // HAr odre oveer er på tur ned -> fortsett ned
-			e.SetMotorDirection(-1)
-
-		case (e.Direction == 0) && (e.PrevDirection == 1) && e.Floor != topFloor: // Har ordre over, stoppet i etasje, var på tur opp og er ikke i toppetasjen -> kjør opp
-			e.SetMotorDirection(1)
-
-		case (e.Direction == 0) && (e.PrevDirection == -1) && (!e.HasOrderBelow()):
-			e.SetMotorDirection(1)
-
-		case (e.Direction == 0) && (e.PrevDirection == -1) && e.Floor != 0: // Har ordre over, var på tur ned stopped i en etasje, ikke bunn etasje-> kjør nedover
-			e.SetMotorDirection(-1)
-
-		case (e.Direction == 0) && (e.PrevDirection != -1) && e.Floor != topFloor: // Har ordre over, stoppet i etasje, var ikke på tur og er ikke i toppetasjen -> kjør opp
-			e.SetMotorDirection(1)
-
-		case (e.Direction == 0) && (e.Floor == 0):
-			e.SetMotorDirection(1)
-
-		default:
-			e.SetMotorDirection(0)
+		return MD_Stop
+	case MD_Down:
+		if e.HasOrderBelow() {
+			return MD_Down
+		} else if e.HasOrderAbove() {
+			return MD_Up
 		}
-
-	case e.HasOrderBelow():
-		switch {
-		case e.Direction == 1: // Har odre under er på tur opp -> fortsett opp
-			e.SetMotorDirection(1)
-
-		case e.Direction == -1: // HAr odre oveer er på tur ned -> fortsett ned
-			e.SetMotorDirection(-1)
-
-		case (e.Direction == 0) && (e.PrevDirection == 1) && (!e.HasOrderAbove()): // står i ro, var på tur opp, har ikke odre over, men har under -> kjør ned
-			e.SetMotorDirection(-1)
-
-		case (e.Direction == 0) && (e.PrevDirection == 1) && e.Floor != topFloor: // Har ordre under, stoppet i etasje, var på tur opp og er ikke i toppetasjen -> kjør opp
-			e.SetMotorDirection(1)
-
-		case (e.Direction == 0) && (e.PrevDirection != 1) && e.Floor != 0: // Har ordre under, var ikke på tur opp, stoppet i en etasje, ikke bunn etasje-> kjør nedover
-			e.SetMotorDirection(-1)
-
-		case (e.Direction == 0) && (e.Floor == topFloor): // mulig redundant
-			e.SetMotorDirection(-1)
-
-		default:
-			e.SetMotorDirection(0)
+		return MD_Stop
+	case MD_Stop:
+		if e.PrevDirection == MD_Down {
+			if e.HasOrderBelow() {
+				return MD_Down
+			} else if e.HasOrderAbove() {
+				return MD_Up
+			}
+		} else {
+			if e.HasOrderAbove() {
+				return MD_Up
+			} else if e.HasOrderBelow() {
+				return MD_Down
+			}
 		}
+		return MD_Stop
+	default:
+		return MD_Stop
+	}
+}
+
+func (e *Elevator) ShouldStop() bool {
+	if e.OrderListCab[e.Floor] == Order_Active {
+		return true
+	}
+	dir := e.Direction
+	if dir == MD_Stop {
+		dir = e.PrevDirection
+	}
+	switch dir {
+	case MD_Up:
+		return e.AssignedOrders[e.Floor][BT_HallUp] || (!e.HasOrderAbove() && e.AssignedOrders[e.Floor][BT_HallDown])
+
+	case MD_Down:
+		return e.AssignedOrders[e.Floor][BT_HallDown] || (!e.HasOrderBelow() && e.AssignedOrders[e.Floor][BT_HallUp])
 
 	default:
-		e.SetMotorDirection(0)
+		return e.AssignedOrders[e.Floor][BT_HallDown] || e.AssignedOrders[e.Floor][BT_HallUp]
 	}
 
+}
+
+func (e *Elevator) ExecuteOrder2() {
+	if e.ShouldStop() {
+		e.StoppFloor()
+		return
+	}
+	nextDir := e.ChooseDirection()
+	e.SetMotorDirection(nextDir)
 }
 
 func (e *Elevator) SteinSaksPapir(Node ElevatorStatus) { //Utfører steinsakspapir algebra

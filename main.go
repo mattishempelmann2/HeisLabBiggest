@@ -84,7 +84,7 @@ func main() {
 			cab1.SetFloorIndicator(a)
 			cab1.UpdateFloor(a)
 			if !cab1.DoorOpen {
-				cab1.ExecuteOrder() // denne åpner dør
+				cab1.ExecuteOrder2() // denne åpner dør
 
 				if cab1.DoorOpen {
 					fmt.Printf("Door opening \n")
@@ -97,7 +97,7 @@ func main() {
 			fmt.Printf("Door closing \n")
 			cab1.DoorOpen = false
 			cab1.SetDoorOpenLamp(false)
-			cab1.ExecuteOrder()
+			cab1.ExecuteOrder2()
 			if cab1.DoorOpen {
 				doorTimer.Reset(3 * time.Second) // Viktig siden, hvis vi har cab order til 0.etasje etter reboot, blir vi stuck uten, da dører åpnes uten å resete timer
 			}
