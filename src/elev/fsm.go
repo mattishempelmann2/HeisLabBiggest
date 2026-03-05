@@ -4,21 +4,6 @@ import (
 	"heis/src/elevio"
 )
 
-func (e *Elevator) SetElevMotorDirection(dir elevio.MotorDirection) {
-	elevio.SetMotorDirection(dir)
-	e.UpdateDirection(dir)
-	e.UpdateBehaviour()
-}
-
-func (e *Elevator) SetElevButtonLamp(button elevio.ButtonType, floor int, value bool) {
-	elevio.SetButtonLamp(button, floor, value)
-}
-
-func (e *Elevator) SetElevDoorOpenLamp(value bool) {
-	elevio.SetDoorOpenLamp(value)
-	e.UpdateBehaviour()
-}
-
 func (e *Elevator) StoppFloor() {
 	e.SetElevMotorDirection(0)
 	e.DoorOpen = true
