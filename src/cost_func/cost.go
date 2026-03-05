@@ -3,7 +3,7 @@ package cost
 import (
 	"encoding/json"
 	"fmt"
-	"heis/src/elevio"
+	"heis/src/elev"
 	"os/exec"
 	"runtime"
 )
@@ -14,10 +14,10 @@ var dirMap = map[int]string{
 	0:  "stop",
 }
 
-var OrderBoolMap = map[elevio.OrderStatus]bool{
-	elevio.Order_Inactive: false,
-	elevio.Order_Pending:  false,
-	elevio.Order_Active:   true,
+var OrderBoolMap = map[elev.OrderStatus]bool{
+	elev.Order_Inactive: false,
+	elev.Order_Pending:  false,
+	elev.Order_Active:   true,
 }
 
 type HRAElevState struct {
@@ -35,7 +35,7 @@ type HRAInput struct {
 func makeHRAElevState(Node any) HRAElevState {
 	elevState := &HRAElevState{}
 	switch Nodetype := Node.(type) {
-	case elevio.Elevator:
+	case elev.Elevator:
 		elevState.Behavior = Nodetype.Behaviour
 		elevState.Floor = Nodetype.Floor
 		elevState.Direction = dirMap[int(Nodetype.Direction)]
@@ -43,7 +43,7 @@ func makeHRAElevState(Node any) HRAElevState {
 			elevState.CabRequests[floor] = OrderBoolMap[Nodetype.OrderListCab[floor]]
 		}
 
-	case elevio.ElevatorStatus:
+	case elev.ElevatorStatus:
 		elevState.Behavior = Nodetype.Behaviour
 		elevState.Floor = Nodetype.CurrentFloor
 		elevState.Direction = dirMap[int(Nodetype.Direction)]
@@ -56,7 +56,7 @@ func makeHRAElevState(Node any) HRAElevState {
 	return *elevState
 }
 
-func MakeHRAInput(localNode elevio.Elevator, otherNodes map[string]elevio.ElevatorStatus) HRAInput {
+func MakeHRAInput(localNode elev.Elevator, otherNodes map[string]elev.ElevatorStatus) HRAInput {
 	HRAInput := &HRAInput{}
 	HRAInput.States = make(map[string]HRAElevState)
 

@@ -3,29 +3,30 @@ package main
 import (
 	"fmt"
 	cost "heis/src/cost_func"
+	"heis/src/elev"
 	"heis/src/elevio"
 	"heis/src/network/bcast"
 	"time"
 )
 
-func PrintOrderMatrix(e elevio.ElevatorStatus) {
+func PrintOrderMatrix(e elev.ElevatorStatus) {
 	fmt.Printf("   %s  %s  %s\n", "Up", "Dn", "Cab") // Header (Optional)
 	for f := 0; f < 4; f++ {
 		fmt.Printf("F%d ", f)
 		for b := 0; b < 2; b++ {
 			switch {
-			case e.OrderListHall[f][b] == elevio.Order_Active:
+			case e.OrderListHall[f][b] == elev.Order_Active:
 				fmt.Printf("[%s] ", "X")
-			case e.OrderListHall[f][b] == elevio.Order_Pending:
+			case e.OrderListHall[f][b] == elev.Order_Pending:
 				fmt.Printf("[%s] ", "P")
 			default:
 				fmt.Printf("[%s] ", " ")
 			}
 		}
 		switch {
-		case e.OrderListCab[f] == elevio.Order_Active:
+		case e.OrderListCab[f] == elev.Order_Active:
 			fmt.Printf("[%s] ", "X")
-		case e.OrderListCab[f] == elevio.Order_Pending:
+		case e.OrderListCab[f] == elev.Order_Pending:
 			fmt.Printf("[%s] ", "P")
 		default:
 			fmt.Printf("[%s] ", " ")
@@ -36,15 +37,15 @@ func PrintOrderMatrix(e elevio.ElevatorStatus) {
 }
 
 func main() {
-	OtherNodes := make(map[string]elevio.ElevatorStatus)     //denne gis til costfunc
+	OtherNodes := make(map[string]elev.ElevatorStatus)       //denne gis til costfunc
 	lastSeen := make(map[string]time.Time)                   //map for å notere når node_x sist sett
 	watchdogTicker := time.NewTicker(500 * time.Millisecond) //sjekk 2 gang i sekund om node død
 	nodeTimeout := 3 * time.Second                           // juster om vi må
 
 	localID := 15657 // bruke noe
 
-	StatusTx := make(chan elevio.ElevatorStatus) //channel med status
-	StatusRx := make(chan elevio.ElevatorStatus)
+	StatusTx := make(chan elev.ElevatorStatus) //channel med status
+	StatusRx := make(chan elev.ElevatorStatus)
 
 	go bcast.Transmitter(20013, StatusTx) //idk hvilken port som er korrekt
 	go bcast.Receiver(20013, StatusRx)
@@ -55,7 +56,7 @@ func main() {
 	address := fmt.Sprintf("localhost:%d", localID) //slipper å manuelt skrive inn argument til init
 	elevio.Init(address, NumFloors)
 
-	cab1 := &elevio.Elevator{}
+	cab1 := &elev.Elevator{}
 	cab1.CabInit(address) //Init func
 
 	drv_buttons := make(chan elevio.ButtonEvent)
@@ -65,7 +66,7 @@ func main() {
 	BtnPress := make(chan bool)
 
 	go elevio.PollButtons(drv_buttons)
-	go cab1.PollFloorSensor(drv_floors, BtnPress)
+	go elevio.PollFloorSensor(drv_floors, BtnPress, cab1.ActiveOrders)
 	go elevio.PollObstructionSwitch(drv_obstr)
 	go elevio.PollStopButton(drv_stop)
 
@@ -81,7 +82,7 @@ func main() {
 			BtnPress <- true
 			runCost = true
 		case a := <-drv_floors: //etasjeupdate
-			cab1.SetFloorIndicator(a)
+			elevio.SetFloorIndicator(a)
 			cab1.UpdateFloor(a)
 			if !cab1.DoorOpen {
 				cab1.ExecuteOrder2() // denne åpner dør
@@ -100,7 +101,7 @@ func main() {
 			} else {
 				fmt.Printf("Door closing \n")
 				cab1.DoorOpen = false
-				cab1.SetDoorOpenLamp(false)
+				cab1.SetElevDoorOpenLamp(false)
 				cab1.ExecuteOrder2()
 				if cab1.DoorOpen {
 					doorTimer.Reset(3 * time.Second) // Viktig siden, hvis vi har cab order til 0.etasje etter reboot, blir vi stuck uten, da dører åpnes uten å resete timer
@@ -109,13 +110,13 @@ func main() {
 			runCost = true
 
 		case <-sendTicker.C: //Periodisk statusupdate
-			cabBackUpCopy := make(map[string][4]elevio.OrderStatus)
+			cabBackUpCopy := make(map[string][4]elev.OrderStatus)
 
 			for key, value := range cab1.CabBackupMap { //tar deep copy, denne kjører fullstendig i denne casen, gjør at programm ikke kræsjer ved sending samtidig som knappetrykk
 				cabBackUpCopy[key] = value
 			}
 
-			msg := elevio.ElevatorStatus{ //Lager statusmelding
+			msg := elev.ElevatorStatus{ //Lager statusmelding
 				SenderID:      address,
 				CurrentFloor:  cab1.Floor,
 				Direction:     int(cab1.Direction),
@@ -172,7 +173,7 @@ func main() {
 			fmt.Printf("%+v\n", a)
 			for f := 0; f < NumFloors; f++ {
 				for b := elevio.ButtonType(0); b < 3; b++ {
-					cab1.SetButtonLamp(b, f, false)
+					cab1.SetElevButtonLamp(b, f, false)
 				}
 			}
 		}
