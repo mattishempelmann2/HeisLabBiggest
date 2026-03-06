@@ -18,7 +18,7 @@ func main() {
 
 	doorTimeOpen := 3 * time.Second
 	doorTimer := time.NewTimer(doorTimeOpen) //må startes/resetes manuelt
-	doorTimer.Stop()
+	doorTimer.Stop()                         // Timer starter når definert, stoppe så den ikke fucker opp states
 
 	sendTicker := time.NewTicker(10 * time.Millisecond) // ticker = går av periodically forever, hvor ofte sender vi status
 
@@ -47,7 +47,6 @@ func main() {
 	go elevio.PollFloorSensor(drv_floors, BtnPress, cab1.ActiveOrders)
 	go elevio.PollObstructionSwitch(drv_obstr)
 	go elevio.PollStopButton(drv_stop)
-	// Timer starter når definert, stoppe så den ikke fucker opp states
 
 	for {
 		runCost := false
@@ -65,7 +64,7 @@ func main() {
 
 				if cab1.DoorOpen {
 					fmt.Printf("Door opening \n")
-					doorTimer.Reset(3 * time.Second)
+					doorTimer.Reset(doorTimeOpen)
 				}
 			}
 			runCost = true
