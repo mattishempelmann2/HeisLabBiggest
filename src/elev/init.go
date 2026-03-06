@@ -18,19 +18,27 @@ func (e *Elevator) UpdateDirection(Direction elevio.MotorDirection) {
 	e.Direction = Direction
 }
 
-func (e *Elevator) CabInit(ID string) {
-	for elevio.GetFloor() != 0 {
+func (e *Elevator) CabInit(ID string, numFloors int) {
+	e.OrderListHall = make([][]OrderStatus, numFloors) //slice lager numfloors antall som igjen inneholder liste med Orderstatus
+	e.AssignedOrders = make([][2]bool, numFloors)
+	for i := range e.OrderListHall {
+		e.OrderListHall[i] = make([]OrderStatus, 2) //fyller for hver etasje, antall knapper er fixed
+	}
+	e.OrderListCab = make([]OrderStatus, numFloors)
+	e.CabBackupMap = make(map[string][]OrderStatus)
+
+	for elevio.GetFloor() != 0 { //kjør ned til bunn
 		e.SetElevMotorDirection(elevio.MD_Down)
 		time.Sleep(_pollRate)
 	}
 	e.SetElevMotorDirection(elevio.MD_Stop)
+
 	e.Floor = 0
 	e.PrevDirection = elevio.MD_Stop
 	e.Direction = elevio.MD_Stop
 	e.DoorOpen = false
 	e.SetElevDoorOpenLamp(false)
 	e.AliveNodes = make(map[string]bool)
-	e.CabBackupMap = make(map[string][4]OrderStatus)
 	e.ID = ID
 	e.MsgCount = 0
 	e.Obstructed = false

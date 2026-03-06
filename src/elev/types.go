@@ -5,10 +5,10 @@ import (
 )
 
 type Elevator struct {
-	OrderListHall  [4][2]OrderStatus
-	OrderListCab   [4]OrderStatus
-	CabBackupMap   map[string][4]OrderStatus
-	AssignedOrders [4][2]bool //orders assigned by costfunk
+	OrderListHall  [][]OrderStatus
+	OrderListCab   []OrderStatus
+	CabBackupMap   map[string][]OrderStatus //nå slices så dynamisk lengde
+	AssignedOrders [][2]bool                //orders assigned by costfunk
 
 	Floor         int
 	Direction     elevio.MotorDirection
@@ -29,9 +29,9 @@ type ElevatorStatus struct { //det som sendes, health checks
 	DoorOpen     bool
 	Behaviour    string
 
-	OrderListHall [4][2]OrderStatus
-	OrderListCab  [4]OrderStatus
-	CabBackupMap  map[string][4]OrderStatus
+	OrderListHall [][]OrderStatus
+	OrderListCab  []OrderStatus //slices, dynamisk lengde
+	CabBackupMap  map[string][]OrderStatus
 
 	MsgID int //For å holde styr på rekkefølge, forkaste gamle meldinger
 }

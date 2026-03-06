@@ -12,6 +12,7 @@ const numButtons = 3
 
 var _initialized bool = false
 var _numFloors int = 4
+var NumFloors int = 4 //default verdi
 var topFloor int = _numFloors - 1
 var _mtx sync.Mutex
 var _conn net.Conn
@@ -22,6 +23,7 @@ func Init(addr string, numFloors int) {
 		return
 	}
 	_numFloors = numFloors
+	NumFloors = numFloors //global variabel
 	_mtx = sync.Mutex{}
 	var err error
 	_conn, err = net.Dial("tcp", addr)

@@ -21,14 +21,14 @@ var OrderBoolMap = map[elev.OrderStatus]bool{
 }
 
 type HRAElevState struct {
-	Behavior    string  `json:"behaviour"`
-	Floor       int     `json:"floor"`
-	Direction   string  `json:"direction"`
-	CabRequests [4]bool `json:"cabRequests"`
+	Behavior    string `json:"behaviour"`
+	Floor       int    `json:"floor"`
+	Direction   string `json:"direction"`
+	CabRequests []bool `json:"cabRequests"`
 }
 
 type HRAInput struct {
-	HallRequests [4][2]bool              `json:"hallRequests"`
+	HallRequests [][2]bool               `json:"hallRequests"`
 	States       map[string]HRAElevState `json:"states"`
 }
 
@@ -39,7 +39,8 @@ func makeHRAElevState(Node any) HRAElevState {
 		elevState.Behavior = Nodetype.Behaviour
 		elevState.Floor = Nodetype.Floor
 		elevState.Direction = dirMap[int(Nodetype.Direction)]
-		for floor := 0; floor < 4; floor++ {
+		elevState.CabRequests = make([]bool, len(Nodetype.OrderListCab))
+		for floor := 0; floor < len(Nodetype.OrderListCab); floor++ {
 			elevState.CabRequests[floor] = OrderBoolMap[Nodetype.OrderListCab[floor]]
 		}
 
@@ -47,7 +48,8 @@ func makeHRAElevState(Node any) HRAElevState {
 		elevState.Behavior = Nodetype.Behaviour
 		elevState.Floor = Nodetype.CurrentFloor
 		elevState.Direction = dirMap[int(Nodetype.Direction)]
-		for floor := 0; floor < 4; floor++ {
+		elevState.CabRequests = make([]bool, len(Nodetype.OrderListCab))
+		for floor := 0; floor < len(Nodetype.OrderListCab); floor++ {
 			elevState.CabRequests[floor] = OrderBoolMap[Nodetype.OrderListCab[floor]]
 		}
 	default:
@@ -59,8 +61,9 @@ func makeHRAElevState(Node any) HRAElevState {
 func MakeHRAInput(localNode elev.Elevator, otherNodes map[string]elev.ElevatorStatus) HRAInput {
 	HRAInput := &HRAInput{}
 	HRAInput.States = make(map[string]HRAElevState)
+	HRAInput.HallRequests = make([][2]bool, len(localNode.OrderListHall))
 
-	for floor := 0; floor < 4; floor++ {
+	for floor := 0; floor < len(localNode.OrderListHall); floor++ {
 		for button := 0; button < 2; button++ {
 			HRAInput.HallRequests[floor][button] = OrderBoolMap[localNode.OrderListHall[floor][button]]
 		}
@@ -74,7 +77,7 @@ func MakeHRAInput(localNode elev.Elevator, otherNodes map[string]elev.ElevatorSt
 	return *HRAInput
 }
 
-func CostFunc(input HRAInput) map[string][4][2]bool {
+func CostFunc(input HRAInput) map[string][][2]bool {
 
 	hraExecutable := ""
 	switch runtime.GOOS {
@@ -101,7 +104,7 @@ func CostFunc(input HRAInput) map[string][4][2]bool {
 		return nil
 	}
 
-	output := new(map[string][4][2]bool)
+	output := new(map[string][][2]bool)
 	err = json.Unmarshal(ret, &output)
 	if err != nil {
 		fmt.Println("json.Unmarshal error: ", err)

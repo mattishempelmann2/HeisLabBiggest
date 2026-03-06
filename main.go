@@ -35,7 +35,7 @@ func main() {
 	elevio.Init(address, NumFloors)
 
 	cab1 := &elev.Elevator{}
-	cab1.CabInit(address) //Init func
+	cab1.CabInit(address, NumFloors) //Init func
 
 	drv_buttons := make(chan elevio.ButtonEvent)
 	drv_floors := make(chan int)
@@ -86,10 +86,12 @@ func main() {
 			runCost = true
 
 		case <-sendTicker.C: //Periodisk statusupdate
-			cabBackUpCopy := make(map[string][4]elev.OrderStatus)
+			cabBackUpCopy := make(map[string][]elev.OrderStatus)
 
-			for key, value := range cab1.CabBackupMap { //tar deep copy, denne kjører fullstendig i denne casen, gjør at programm ikke kræsjer ved sending samtidig som knappetrykk
-				cabBackUpCopy[key] = value
+			for nodeID, cabOrders := range cab1.CabBackupMap { //tar deep copy, denne kjører fullstendig i denne casen, gjør at programm ikke kræsjer ved sending samtidig som knappetrykk
+				cabOrdersCopy := make([]elev.OrderStatus, len(cabOrders)) //lager ny liste med same lengde
+				copy(cabOrdersCopy, cabOrders)                            //kopierer over verdier
+				cabBackUpCopy[nodeID] = cabOrdersCopy                     //Fyller inn i mapet vi laget for å sende
 			}
 
 			msg := elev.ElevatorStatus{ //Lager statusmelding
@@ -122,8 +124,8 @@ func main() {
 			cab1.CabBackupFunc(msg)  // back up cab orders fra melding mottat
 			cab1.SteinSaksPapir(msg) // hvis ikke egen eller gammel melding, gjør steinsakspapir algebra
 
-			stateChanged := (msg.OrderListHall != OtherNodes[msg.SenderID].OrderListHall) || (msg.OrderListCab != OtherNodes[msg.SenderID].OrderListCab) // Sjekk om state changed, sparer print og beregning
-			OtherNodes[msg.SenderID] = msg                                                                                                               //ta vare på siste msg
+			stateChanged := (!elev.HallOrdersEqual(msg.OrderListHall, OtherNodes[msg.SenderID].OrderListHall)) || !elev.CabOrdersEqual(msg.OrderListCab, OtherNodes[msg.SenderID].OrderListCab) // Sjekk om state changed, sparer print og beregning
+			OtherNodes[msg.SenderID] = msg                                                                                                                                                      //ta vare på siste msg
 
 			if stateChanged { // kun print/gjør beregning ved endring, slipper spam
 				//PrintOrderMatrix(msg)
