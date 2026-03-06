@@ -9,38 +9,18 @@ import (
 	"time"
 )
 
-func PrintOrderMatrix(e elev.ElevatorStatus) {
-	fmt.Printf("   %s  %s  %s\n", "Up", "Dn", "Cab") // Header (Optional)
-	for f := 0; f < 4; f++ {
-		fmt.Printf("F%d ", f)
-		for b := 0; b < 2; b++ {
-			switch {
-			case e.OrderListHall[f][b] == elev.Order_Active:
-				fmt.Printf("[%s] ", "X")
-			case e.OrderListHall[f][b] == elev.Order_Pending:
-				fmt.Printf("[%s] ", "P")
-			default:
-				fmt.Printf("[%s] ", " ")
-			}
-		}
-		switch {
-		case e.OrderListCab[f] == elev.Order_Active:
-			fmt.Printf("[%s] ", "X")
-		case e.OrderListCab[f] == elev.Order_Pending:
-			fmt.Printf("[%s] ", "P")
-		default:
-			fmt.Printf("[%s] ", " ")
-		}
-		fmt.Printf("\n")
-	}
-	fmt.Printf("msgID: %d, from NodeID: %s \n", e.MsgID, e.SenderID)
-}
-
 func main() {
-	OtherNodes := make(map[string]elev.ElevatorStatus)       //denne gis til costfunc
-	lastSeen := make(map[string]time.Time)                   //map for å notere når node_x sist sett
+	OtherNodes := make(map[string]elev.ElevatorStatus) //denne gis til costfunc
+	lastSeen := make(map[string]time.Time)             //map for å notere når node_x sist sett
+
 	watchdogTicker := time.NewTicker(500 * time.Millisecond) //sjekk 2 gang i sekund om node død
 	nodeTimeout := 3 * time.Second                           // juster om vi må
+
+	doorTimeOpen := 3 * time.Second
+	doorTimer := time.NewTimer(doorTimeOpen) //må startes/resetes manuelt
+	doorTimer.Stop()
+
+	sendTicker := time.NewTicker(10 * time.Millisecond) // ticker = går av periodically forever, hvor ofte sender vi status
 
 	localID := 15657 // bruke noe
 
@@ -49,8 +29,6 @@ func main() {
 
 	go bcast.Transmitter(20013, StatusTx) //idk hvilken port som er korrekt
 	go bcast.Receiver(20013, StatusRx)
-
-	sendTicker := time.NewTicker(10 * time.Millisecond) // ticker = går av periodically forever, hvor ofte sender vi status
 
 	const NumFloors = 4
 	address := fmt.Sprintf("localhost:%d", localID) //slipper å manuelt skrive inn argument til init
@@ -69,9 +47,7 @@ func main() {
 	go elevio.PollFloorSensor(drv_floors, BtnPress, cab1.ActiveOrders)
 	go elevio.PollObstructionSwitch(drv_obstr)
 	go elevio.PollStopButton(drv_stop)
-
-	doorTimer := time.NewTimer(3 * time.Second) //må startes/resetes manuelt
-	doorTimer.Stop()                            // Timer starter når definert, stoppe så den ikke fucker opp states
+	// Timer starter når definert, stoppe så den ikke fucker opp states
 
 	for {
 		runCost := false
@@ -97,14 +73,14 @@ func main() {
 		case <-doorTimer.C: //timer etter dør åpen
 			if cab1.Obstructed {
 				fmt.Printf("Cab obstructed, keeping door open \n")
-				doorTimer.Reset(3 * time.Second)
+				doorTimer.Reset(doorTimeOpen)
 			} else {
 				fmt.Printf("Door closing \n")
 				cab1.DoorOpen = false
 				cab1.SetElevDoorOpenLamp(false)
 				cab1.ExecuteOrder2()
 				if cab1.DoorOpen {
-					doorTimer.Reset(3 * time.Second) // Viktig siden, hvis vi har cab order til 0.etasje etter reboot, blir vi stuck uten, da dører åpnes uten å resete timer
+					doorTimer.Reset(doorTimeOpen) // Viktig siden, hvis vi har cab order til 0.etasje etter reboot, blir vi stuck uten, da dører åpnes uten å resete timer
 				}
 			}
 			runCost = true
@@ -182,4 +158,31 @@ func main() {
 			cab1.UpdateHallLights() // synkroniserer hall lights
 		}
 	}
+}
+
+func PrintOrderMatrix(e elev.ElevatorStatus) {
+	fmt.Printf("   %s  %s  %s\n", "Up", "Dn", "Cab") // Header (Optional)
+	for f := 0; f < 4; f++ {
+		fmt.Printf("F%d ", f)
+		for b := 0; b < 2; b++ {
+			switch {
+			case e.OrderListHall[f][b] == elev.Order_Active:
+				fmt.Printf("[%s] ", "X")
+			case e.OrderListHall[f][b] == elev.Order_Pending:
+				fmt.Printf("[%s] ", "P")
+			default:
+				fmt.Printf("[%s] ", " ")
+			}
+		}
+		switch {
+		case e.OrderListCab[f] == elev.Order_Active:
+			fmt.Printf("[%s] ", "X")
+		case e.OrderListCab[f] == elev.Order_Pending:
+			fmt.Printf("[%s] ", "P")
+		default:
+			fmt.Printf("[%s] ", " ")
+		}
+		fmt.Printf("\n")
+	}
+	fmt.Printf("msgID: %d, from NodeID: %s \n", e.MsgID, e.SenderID)
 }
