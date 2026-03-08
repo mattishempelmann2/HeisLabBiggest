@@ -8,41 +8,13 @@ import (
 )
 
 const _pollRate = 20 * time.Millisecond
+const numButtons = 3
 
 var _initialized bool = false
 var _numFloors int = 4
 var topFloor int = _numFloors - 1
 var _mtx sync.Mutex
 var _conn net.Conn
-
-type MotorDirection int
-
-const (
-	MD_Up   MotorDirection = 1
-	MD_Down                = -1
-	MD_Stop                = 0
-)
-
-type ButtonType int
-
-const (
-	BT_HallUp   ButtonType = 0
-	BT_HallDown            = 1
-	BT_Cab                 = 2
-)
-
-type ButtonEvent struct {
-	Floor  int
-	Button ButtonType
-}
-
-type Elevator struct {
-	OrderList   [4][3]bool
-	Floor       int
-	Retning     MotorDirection
-	PrevRetning MotorDirection
-	DoorOpen    bool
-}
 
 func Init(addr string, numFloors int) {
 	if _initialized {
@@ -59,9 +31,71 @@ func Init(addr string, numFloors int) {
 	_initialized = true
 }
 
+type MotorDirection int
+
+const (
+	MD_Up   MotorDirection = 1
+	MD_Down MotorDirection = -1
+	MD_Stop MotorDirection = 0
+)
+
+type ButtonType int
+
+const (
+	BT_HallUp   ButtonType = 0
+	BT_HallDown ButtonType = 1
+	BT_Cab      ButtonType = 2
+)
+
+type ButtonEvent struct {
+	Floor  int
+	Button ButtonType
+}
+
+type Elevator struct {
+	OrderListHall  [4][2]OrderStatus
+	OrderListCab   [4]OrderStatus
+	CabBackupMap   map[string][4]OrderStatus
+	AssignedOrders [4][2]bool //orders assigned by costfunk
+
+	Floor         int
+	Direction     MotorDirection
+	PrevDirection MotorDirection
+	DoorOpen      bool
+	Behaviour     string
+	Obstructed    bool
+
+	AliveNodes map[string]bool
+	ID         string
+	MsgCount   int
+}
+
+type ElevatorStatus struct { //det som sendes, health checks
+	SenderID     string
+	CurrentFloor int
+	Direction    int
+	DoorOpen     bool
+	Behaviour    string
+
+	OrderListHall [4][2]OrderStatus
+	OrderListCab  [4]OrderStatus
+	CabBackupMap  map[string][4]OrderStatus
+
+	MsgID int //For å holde styr på rekkefølge, forkaste gamle meldinger
+}
+
+type OrderStatus int
+
+const (
+	Order_Inactive = 0 // bruker int, kan eventuelt bruke veldig forskjellieg verdier for å gjøre robust mot "cosmic ray bitflip"
+	Order_Pending  = 1 // UDP har vist checksum så mulig irellevant, kanskje bruke 0 til unknown siden det er default value for int?
+	Order_Active   = 2
+)
+
 func (e *Elevator) SetMotorDirection(dir MotorDirection) {
 	write([4]byte{1, byte(dir), 0, 0})
-	e.UpdateRetning(dir)
+	e.UpdateDirection(dir)
+	e.UpdateBehaviour()
 }
 
 func (e *Elevator) SetButtonLamp(button ButtonType, floor int, value bool) {
@@ -74,24 +108,19 @@ func (e *Elevator) SetFloorIndicator(floor int) {
 
 func (e *Elevator) SetDoorOpenLamp(value bool) {
 	write([4]byte{4, toByte(value), 0, 0})
+	e.UpdateBehaviour()
 }
 
 func (e *Elevator) SetStopLamp(value bool) {
 	write([4]byte{5, toByte(value), 0, 0})
 }
 
-func (e *Elevator) UpdateOrderList(Order ButtonEvent) {
-
-	e.UpdateElevatorOrder(Order)
-	//for req := range Orders {
-	//	e.UpdateElevatorOrder(req)
-	//	fmt.Printf("executing order: floor: %d button : %d", req.Floor, req.Button)
-	//orderexecution
-	//	}
-}
-
 func (e *Elevator) UpdateElevatorOrder(btn ButtonEvent) {
-	e.OrderList[btn.Floor][btn.Button] = true
+	if btn.Button < 2 {
+		e.OrderListHall[btn.Floor][btn.Button] = Order_Pending
+	} else {
+		e.OrderListCab[btn.Floor] = Order_Pending
+	}
 }
 
 func (e *Elevator) UpdateFloor(Floor int) {
@@ -100,15 +129,15 @@ func (e *Elevator) UpdateFloor(Floor int) {
 	}
 }
 
-func (e *Elevator) UpdateRetning(Retning MotorDirection) {
-	e.PrevRetning = e.Retning
-	e.Retning = Retning
+func (e *Elevator) UpdateDirection(Direction MotorDirection) {
+	e.PrevDirection = e.Direction
+	e.Direction = Direction
 }
 
 func (e *Elevator) HasOrderAbove() bool {
-	for i := e.Floor + 1; i < _numFloors; i++ {
-		for j := 0; j < 3; j++ {
-			if e.OrderList[i][j] == true {
+	for f := e.Floor + 1; f < _numFloors; f++ {
+		for b := 0; b < 2; b++ {
+			if e.AssignedOrders[f][b] || (e.OrderListCab[f] == Order_Active) {
 				return true
 			}
 		}
@@ -118,9 +147,9 @@ func (e *Elevator) HasOrderAbove() bool {
 }
 
 func (e *Elevator) HasOrderBelow() bool {
-	for i := e.Floor - 1; i >= 0; i-- {
-		for j := 0; j < 3; j++ {
-			if e.OrderList[i][j] == true {
+	for f := e.Floor - 1; f >= 0; f-- {
+		for b := 0; b < 2; b++ {
+			if e.AssignedOrders[f][b] || (e.OrderListCab[f] == Order_Active) {
 				return true
 			}
 		}
@@ -130,18 +159,21 @@ func (e *Elevator) HasOrderBelow() bool {
 }
 
 func (e *Elevator) FloorOrder() bool {
-	for i := 0; i < 3; i++ {
-		if e.OrderList[e.Floor][i] == true {
+	for b := 0; b < 2; b++ {
+		if e.AssignedOrders[e.Floor][b] {
 			return true
 		}
+	}
+	if e.OrderListCab[e.Floor] == Order_Active {
+		return true
 	}
 	return false
 }
 
-func (e *Elevator) ActiveOrders() bool {
-	for i := 0; i < topFloor; i++ {
-		for j := 0; j < 3; j++ {
-			if e.OrderList[i][j] == true {
+func (e *Elevator) ActiveOrders() bool { //needed for PollFloorSensor
+	for i := 0; i < _numFloors; i++ {
+		for j := 0; j < 2; j++ {
+			if e.AssignedOrders[i][j] || (e.OrderListCab[i] == Order_Active) {
 				return true
 			}
 		}
@@ -149,107 +181,218 @@ func (e *Elevator) ActiveOrders() bool {
 	return false
 }
 
-func (e *Elevator) ClearOrderFloor() {
-	for i := 0; i < topFloor; i++ {
-		e.OrderList[e.Floor][i] = false
-		e.SetButtonLamp(ButtonType(i), e.Floor, false)
-
+func (e *Elevator) ClearOrderFloor() { // mulig ikke lur måte å gjøre det på, rettelse funker clearer i GLOBAL hall orders slik at cost funksjon clearer lokal
+	if e.OrderListCab[e.Floor] == Order_Active { //cab orders enkelt og greit
+		e.OrderListCab[e.Floor] = Order_Inactive
+		e.SetButtonLamp(ButtonType(2), e.Floor, false)
 	}
-}
 
-func (e *Elevator) DriveTo(floor int) { // fjern
-	for e.Floor != floor {
-		switch {
-		case floor > e.Floor:
-			e.SetMotorDirection(1)
+	upAssigned := e.OrderListHall[e.Floor][BT_HallUp] == Order_Active && e.AssignedOrders[e.Floor][BT_HallUp]       //Har vi hall ordre oppover
+	downAssigned := e.OrderListHall[e.Floor][BT_HallDown] == Order_Active && e.AssignedOrders[e.Floor][BT_HallDown] // Har vi hall ordre nedover
 
+	dir := e.Direction  //hva er retning
+	if dir == MD_Stop { // hvis vi står i ro hvordan kom vi hit.
+		dir = e.PrevDirection
+	}
+
+	clearUp := (dir == MD_Up) || (dir == MD_Down && !e.HasOrderBelow()) || (dir == MD_Stop && e.HasOrderAbove()) //utfør ordre opp om vi var på tur opp/ned men ingen flere ned/ i ro og skal opp
+	clearDown := (dir == MD_Down) || (dir == MD_Up && !e.HasOrderAbove()) || (dir == MD_Stop && e.HasOrderBelow() && !clearUp)
+
+	if dir == MD_Stop && !clearDown && !clearUp { //edge case ved init, hvor noen kommer inn fra hall, ikke trykket cab order enda.
+		if upAssigned {
+			clearUp = true
+		} else if downAssigned {
+			clearDown = true
 		}
+
+	}
+
+	if clearUp && upAssigned {
+		e.OrderListHall[e.Floor][BT_HallUp] = Order_Inactive
+		e.SetButtonLamp(BT_HallUp, e.Floor, false)
+		return
+	}
+
+	if clearDown && downAssigned {
+		e.OrderListHall[e.Floor][BT_HallDown] = Order_Inactive
+		e.SetButtonLamp(BT_HallDown, e.Floor, false)
 	}
 }
 
-func (e *Elevator) DoorTimer(SendDone chan<- bool) {
-	time.Sleep(3 * time.Second)
-	SendDone <- true
+func (e *Elevator) CabInit(ID string) {
+	for GetFloor() != 0 {
+		e.SetMotorDirection(MD_Down)
+		time.Sleep(_pollRate)
+	}
+	e.SetMotorDirection(MD_Stop)
+	e.Floor = 0
+	e.PrevDirection = MD_Stop
+	e.Direction = MD_Stop
+	e.DoorOpen = false
+	e.SetDoorOpenLamp(false)
+	e.AliveNodes = make(map[string]bool)
+	e.CabBackupMap = make(map[string][4]OrderStatus)
+	e.ID = ID
+	e.MsgCount = 0
+	e.Obstructed = false
 }
 
 func (e *Elevator) StoppFloor() {
 	e.SetMotorDirection(0)
 	e.DoorOpen = true
 	e.SetDoorOpenLamp(true)
-	//time.Sleep(3 * time.Second)
-	//e.DoorOpen = false
-	//e.SetDoorOpenLamp(false)
 	e.ClearOrderFloor()
+
 }
 
-func (e *Elevator) ExecuteOrder() {
-	switch {
-	case e.FloorOrder():
-		switch {
-		case e.OrderList[e.Floor][2] == true: // knapp cab
-			e.StoppFloor()
-		case (e.Retning == 1) && (e.OrderList[e.Floor][0] == true): //på tur oppover og knapp hall opp
-			e.StoppFloor()
-		case e.Retning == -1 && (e.OrderList[e.Floor][1] == true): // tur nedover knapp hall ned
-			e.StoppFloor()
-		case e.Retning == 0 && ((e.OrderList[e.Floor][1] == true) || (e.OrderList[e.Floor][0] == true)): // tur nedover knapp hall ned
-			e.StoppFloor()
-		default:
-			break // mulig redundant
+func (e *Elevator) ChooseDirection() MotorDirection {
+	switch e.Direction {
+	case MD_Up:
+		if e.HasOrderAbove() {
+			return MD_Up
+		} else if e.HasOrderBelow() {
+			return MD_Down
 		}
-
-	case e.HasOrderAbove():
-		switch {
-		case e.Retning == 1: // Har odre over er på tur opp -> fortsett opp
-			e.SetMotorDirection(1)
-
-		case e.Retning == -1: // HAr odre oveer er på tur ned -> fortsett ned
-			e.SetMotorDirection(-1)
-
-		case (e.Retning == 0) && (e.PrevRetning == 1) && e.Floor != topFloor: // Har ordre over, stoppet i etasje, var på tur opp og er ikke i toppetasjen -> kjør opp
-			e.SetMotorDirection(1)
-
-		case (e.Retning == 0) && (e.PrevRetning == -1) && e.Floor != 0: // Har odre over, var på tur ned stopped i en etasje, ikke bunn etasje-> kjør nedover
-			e.SetMotorDirection(-1)
-
-		case (e.Retning == 0) && (e.PrevRetning == 0) && e.Floor != topFloor: // Har odre over, var på tur ned stopped i en etasje, ikke bunn etasje-> kjør nedover
-			e.SetMotorDirection(1)
-		
-		case (e.Retning == 0) && (e.Floor == 0):
-			e.SetMotorDirection(1)
-
-		default:
-			break
+		return MD_Stop
+	case MD_Down:
+		if e.HasOrderBelow() {
+			return MD_Down
+		} else if e.HasOrderAbove() {
+			return MD_Up
 		}
-
-	case e.HasOrderBelow():
-		switch {
-		case e.Retning == 1: // Har odre under er på tur opp -> fortsett opp
-			e.SetMotorDirection(1)
-
-		case e.Retning == -1: // HAr odre oveer er på tur ned -> fortsett ned
-			e.SetMotorDirection(-1)
-
-		case (e.Retning == 0) && (e.PrevRetning == 1) && e.Floor != topFloor: // Har ordre over, stoppet i etasje, var på tur opp og er ikke i toppetasjen -> kjør opp
-			e.SetMotorDirection(1)
-
-		case (e.Retning == 0) && (e.PrevRetning == -1) && e.Floor != 0: // Har odre over, var på tur ned stopped i en etasje, ikke bunn etasje-> kjør nedover
-			e.SetMotorDirection(-1)
-
-		case (e.Retning == 0) && (e.PrevRetning == 0) && e.Floor != 0: // Har odre over, var på tur ned stopped i en etasje, ikke bunn etasje-> kjør nedover
-			e.SetMotorDirection(-1)
-		
-		case (e.Retning == 0) && (e.Floor == topFloor):
-			e.SetMotorDirection(-1)
-
-		default:
-			break
+		return MD_Stop
+	case MD_Stop:
+		if e.PrevDirection == MD_Down {
+			if e.HasOrderBelow() {
+				return MD_Down
+			} else if e.HasOrderAbove() {
+				return MD_Up
+			}
+		} else {
+			if e.HasOrderAbove() {
+				return MD_Up
+			} else if e.HasOrderBelow() {
+				return MD_Down
+			}
 		}
+		return MD_Stop
+	default:
+		return MD_Stop
+	}
+}
+
+func (e *Elevator) ShouldStop() bool {
+	if e.OrderListCab[e.Floor] == Order_Active {
+		return true
+	}
+	dir := e.Direction
+	if dir == MD_Stop {
+		dir = e.PrevDirection
+	}
+	switch dir {
+	case MD_Up:
+		return e.AssignedOrders[e.Floor][BT_HallUp] || (!e.HasOrderAbove() && e.AssignedOrders[e.Floor][BT_HallDown])
+
+	case MD_Down:
+		return e.AssignedOrders[e.Floor][BT_HallDown] || (!e.HasOrderBelow() && e.AssignedOrders[e.Floor][BT_HallUp])
 
 	default:
-		e.SetMotorDirection(0)
+		return e.AssignedOrders[e.Floor][BT_HallDown] || e.AssignedOrders[e.Floor][BT_HallUp]
 	}
 
+}
+
+func (e *Elevator) ExecuteOrder2() {
+	if e.ShouldStop() {
+		e.StoppFloor()
+		return
+	}
+	nextDir := e.ChooseDirection()
+	e.SetMotorDirection(nextDir)
+}
+
+func (e *Elevator) SteinSaksPapir(Node ElevatorStatus) { //Utfører steinsakspapir algebra
+	for i := 0; i < _numFloors; i++ {
+		for j := 0; j < 2; j++ {
+			switch {
+			case (e.OrderListHall[i][j] == Order_Inactive) && (Node.OrderListHall[i][j] == Order_Pending): // var inaktiv, får pending fra annen node = pending
+				e.OrderListHall[i][j] = Order_Pending
+			case (e.OrderListHall[i][j] == Order_Pending) && ((Node.OrderListHall[i][j] == Order_Pending) || (Node.OrderListHall[i][j] == Order_Active)): // Ordre er pending, får enten pending eller aktiv fra annen node -> aktiv
+				e.OrderListHall[i][j] = Order_Active
+				e.SetButtonLamp(ButtonType(j), i, true) // noe av det dummeste jeg har sett, caste i som er en int til buttontype som er en int
+			case (e.OrderListHall[i][j] == Order_Active) && (Node.OrderListHall[i][j] == Order_Inactive): // Ordre er aktiv, blir utført annen node->satt inaktiv der = inaktiv her
+				e.OrderListHall[i][j] = Order_Inactive
+				e.SetButtonLamp(ButtonType(j), i, false)
+			default: // legge til noe her? Usikker hva default case burde være
+				continue
+			}
+		}
+	}
+	//skru på lamper cab orders, aktiver de basert på å sjekke map fra andre elev og egen orderlist
+	CabBackup := Node.CabBackupMap[e.ID]
+	for k := 0; k < _numFloors; k++ {
+		switch {
+		case (e.OrderListCab[k] == Order_Pending) && CabBackup[k] == Order_Active:
+			e.OrderListCab[k] = Order_Active
+			e.SetButtonLamp(ButtonType(2), k, true)
+		case (e.OrderListCab[k] == Order_Inactive) && CabBackup[k] == Order_Active && e.MsgCount < 100: // Hvis under 100msg sendt, første sek, oppstart, vi tillater recovery fra andre noder
+			if e.Floor == k && e.DoorOpen { // Unngår dobbel aktivering av ordre i 0 etasje etter reboot, slipper 6 sekund dør åpning
+				continue
+			}
+			e.OrderListCab[k] = Order_Active
+			e.SetButtonLamp(ButtonType(2), k, true)
+		default:
+			continue
+		}
+	}
+}
+
+func (e *Elevator) CabBackupFunc(Node ElevatorStatus) {
+	CabBackup := e.CabBackupMap[Node.SenderID] // Henter map med caborder for NODE vi snakker med atm
+
+	for k := 0; k < _numFloors; k++ { // gjør endringer på map basert på map og melding fra node vi snakker med
+		incomingCabstate := Node.OrderListCab[k]
+		currentBackupState := CabBackup[k]
+		switch {
+		case (currentBackupState == Order_Inactive) && (incomingCabstate == Order_Pending):
+			CabBackup[k] = Order_Pending
+
+		case (currentBackupState == Order_Pending) && (incomingCabstate == Order_Pending || incomingCabstate == Order_Active):
+			CabBackup[k] = Order_Active
+
+		case (currentBackupState == Order_Active) && (incomingCabstate == Order_Inactive):
+			CabBackup[k] = Order_Inactive
+
+		default:
+			continue
+		}
+
+	}
+	e.CabBackupMap[Node.SenderID] = CabBackup // skriver ny status til map
+}
+
+func (e *Elevator) UpdateBehaviour() {
+	switch {
+	case e.DoorOpen:
+		e.Behaviour = "doorOpen"
+	case e.Direction != 0:
+		e.Behaviour = "moving"
+	default:
+		e.Behaviour = "idle"
+	}
+}
+
+func (e *Elevator) UpdateHallLights() {
+	for f := 0; f < 4; f++ {
+		for b := 0; b < 2; b++ {
+			if e.OrderListHall[f][b] == Order_Active {
+				e.SetButtonLamp(ButtonType(b), f, true) // holder lys up to date
+			} else {
+				e.SetButtonLamp(ButtonType(b), f, false) // skrur av lys etter reset, dersom ordre tatt av annen heis i mellomtiden
+			}
+
+		}
+	}
 }
 
 func PollButtons(receiver chan<- ButtonEvent) {
