@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	cost "heis/src/cost_func"
 	"heis/src/elevio"
@@ -41,8 +42,8 @@ func main() {
 	watchdogTicker := time.NewTicker(500 * time.Millisecond) //sjekk 2 gang i sekund om node død
 	nodeTimeout := 3 * time.Second                           // juster om vi må
 
-	localID := 15657 // bruke noe
-
+	localID := flag.Int("port", 15657, "UDP port")
+	flag.Parse()
 	StatusTx := make(chan elevio.ElevatorStatus) //channel med status
 	StatusRx := make(chan elevio.ElevatorStatus)
 
@@ -52,7 +53,7 @@ func main() {
 	sendTicker := time.NewTicker(10 * time.Millisecond) // ticker = går av periodically forever, hvor ofte sender vi status
 
 	const NumFloors = 4
-	address := fmt.Sprintf("localhost:%d", localID) //slipper å manuelt skrive inn argument til init
+	address := fmt.Sprintf("localhost:%d", *localID) //slipper å manuelt skrive inn argument til init
 	elevio.Init(address, NumFloors)
 
 	cab1 := &elevio.Elevator{}
