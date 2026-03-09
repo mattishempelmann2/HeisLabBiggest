@@ -42,7 +42,7 @@ func main() {
 	watchdogTicker := time.NewTicker(500 * time.Millisecond) //sjekk 2 gang i sekund om node død
 	nodeTimeout := 3 * time.Second                           // juster om vi må
 
-	localID := flag.Int("port", 15657, "UDP port")
+	localID := flag.Int("port", 15656, "UDP port")
 	flag.Parse()
 	StatusTx := make(chan elevio.ElevatorStatus) //channel med status
 	StatusRx := make(chan elevio.ElevatorStatus)
