@@ -15,18 +15,19 @@ func (e *Elevator) SteinSaksPapir(Node ElevatorStatus, OtherNodes map[string]Ele
 				e.SetElevButtonLamp(elevio.ButtonType(b), f, true)
 			case (e.OrderListHall[f][b] == Order_Pending) && ((Node.OrderListHall[f][b] == Order_Pending) || (Node.OrderListHall[f][b] == Order_Active)): // Ordre er pending, får enten pending eller aktiv fra annen node -> aktiv
 				e.OrderListHall[f][b] = Order_Active
-				e.SetElevButtonLamp(elevio.ButtonType(b), f, true) // noe av det dummeste jeg har sett, caste i som er en int til buttontype som er en int
+				e.SetElevButtonLamp(elevio.ButtonType(b), f, true)
 			case (e.OrderListHall[f][b] == Order_Active) && (Node.OrderListHall[f][b] == Order_PendingInactive): //Aktiv her, har blitt utført annet sted, gjør klar til å sette utført
-				e.OrderListHall[f][b] = Order_PendingInactive
-			case (e.OrderListHall[f][b] == Order_PendingInactive) && Node.OrderListHall[f][b] == Order_Pending:
+				e.OrderListHall[f][b] = Order_PendingInactive //maybe skru av lys her og
+
+			case (e.OrderListHall[f][b] == Order_PendingInactive) && Node.OrderListHall[f][b] == Order_Pending: //ordren var egt utført men ble trykket på nytt, trur ikke denne i praksis vil oppstå, pga speed
 				e.OrderListHall[f][b] = Order_Pending
-			case (e.OrderListHall[f][b] == Order_PendingInactive || e.OrderListHall[f][b] == Order_Inactive) && (Node.OrderListHall[f][b] == Order_PendingInactive || Node.OrderListHall[f][b] == Order_Inactive): // Ordre er aktiv, blir utført annen node->satt inaktiv der = inaktiv her
-				if e.OrderListHall[f][b] == Order_PendingInactive {
-					ClearConsensus := true
-					for id, otherNodeStatus := range OtherNodes {
+			case (e.OrderListHall[f][b] == Order_PendingInactive || e.OrderListHall[f][b] == Order_Inactive) && (Node.OrderListHall[f][b] == Order_PendingInactive || Node.OrderListHall[f][b] == Order_Inactive): // inaktiv/pendingInaktiv her eller på Node
+				if e.OrderListHall[f][b] == Order_PendingInactive { // Er det her den er satt til pendingInaktiv
+					ClearConsensus := true                        //Er alle Noder enige, lettere å sjekke etter en negativ, en å telle antall positive
+					for id, otherNodeStatus := range OtherNodes { //iterer liste med status andre noder
 						if e.AliveNodes[id] { // Denne checken trengs egentlig ikke da Othernodes i seg selv er en slags AliveNodes, menmen kanskje det trengs down the line
-							state := otherNodeStatus.OrderListHall[f][b]
-							if state != Order_Inactive && state != Order_PendingInactive {
+							state := otherNodeStatus.OrderListHall[f][b]                   //ordren vi sjekker
+							if state != Order_Inactive && state != Order_PendingInactive { //hvis ikke inaktiv/PendingInaktiv på alle nodene så er vi ikke klar til å sette til inaktiv
 								ClearConsensus = false
 								break
 							}
