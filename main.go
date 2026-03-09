@@ -41,7 +41,7 @@ func main() {
 	drv_floors := make(chan int)
 	drv_obstr := make(chan bool)
 	drv_stop := make(chan bool)
-	BtnPress := make(chan bool)
+	BtnPress := make(chan bool, 1) //buffered channel to prevent deadlocks
 
 	go elevio.PollButtons(drv_buttons)
 	go elevio.PollFloorSensor(drv_floors, BtnPress, cab1.ActiveOrders)
@@ -108,7 +108,7 @@ func main() {
 			cab1.MsgCount++
 
 		case msg := <-StatusRx: //Mottar status update
-			if (msg.SenderID == address) || msg.MsgID < OtherNodes[msg.SenderID].MsgID {
+			if (msg.SenderID == address) || msg.MsgID <= OtherNodes[msg.SenderID].MsgID {
 				continue
 			}
 
@@ -154,7 +154,10 @@ func main() {
 			}
 		}
 		if runCost {
-			cab1.AssignedOrders = cost.CostFunc(cost.MakeHRAInput(*cab1, OtherNodes))[address]
+			result := cost.CostFunc(cost.MakeHRAInput(*cab1, OtherNodes))[address]
+			if result != nil {
+				cab1.AssignedOrders = result
+			}
 			cab1.UpdateHallLights() // synkroniserer hall lights
 		}
 	}

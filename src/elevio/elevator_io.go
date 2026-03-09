@@ -106,7 +106,7 @@ func PollFloorSensor(receiver chan<- int, btnPress <-chan bool, hasActiveOrders 
 			buttonPressed = false
 		}
 
-		if (v != prev && v != -1) || (v != -1 && buttonPressed) || (hasActiveOrders() && v != -1) {
+		if (v != prev && v != -1) || (v != -1 && buttonPressed) || (hasActiveOrders() && v != -1) { //denne fyrer hvert 20ms når aktive ordre, prøvd å fjerne men det ødela absolutt alt annet
 			receiver <- v
 		}
 		prev = v

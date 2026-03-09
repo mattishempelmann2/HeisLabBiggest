@@ -23,7 +23,7 @@ func (e *Elevator) SteinSaksPapir(Node ElevatorStatus, OtherNodes map[string]Ele
 				e.OrderListHall[f][b] = Order_Pending
 			case (e.OrderListHall[f][b] == Order_PendingInactive || e.OrderListHall[f][b] == Order_Inactive) && (Node.OrderListHall[f][b] == Order_PendingInactive || Node.OrderListHall[f][b] == Order_Inactive): // inaktiv/pendingInaktiv her eller på Node
 				if e.OrderListHall[f][b] == Order_PendingInactive { // Er det her den er satt til pendingInaktiv
-					ClearConsensus := true                        //Er alle Noder enige, lettere å sjekke etter en negativ, en å telle antall positive
+					ClearConsensus := true                        //Er alle Noder enige, lettere å sjekke etter en negativ, enn å telle antall positive
 					for id, otherNodeStatus := range OtherNodes { //iterer liste med status andre noder
 						if e.AliveNodes[id] { // Denne checken trengs egentlig ikke da Othernodes i seg selv er en slags AliveNodes, menmen kanskje det trengs down the line
 							state := otherNodeStatus.OrderListHall[f][b]                   //ordren vi sjekker
