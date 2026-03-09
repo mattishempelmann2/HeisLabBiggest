@@ -55,6 +55,14 @@ func main() {
 		case a := <-drv_buttons: //knappetrykk
 			cab1.UpdateElevatorOrder(a)
 			BtnPress <- true
+
+			if a.Button == elevio.BT_Cab && cab1.DoorOpen {
+				goingWrongWay := (cab1.AnnouncedDirection == elevio.MD_Up && a.Floor < cab1.Floor) || (cab1.AnnouncedDirection == elevio.MD_Down && a.Floor > cab1.Floor)
+				if goingWrongWay {
+					cab1.AnnouncementPending = true
+				}
+			}
+
 			runCost = true
 		case a := <-drv_floors: //etasjeupdate
 			elevio.SetFloorIndicator(a)
@@ -72,6 +80,11 @@ func main() {
 		case <-doorTimer.C: //timer etter dør åpen
 			if cab1.Obstructed {
 				fmt.Printf("Cab obstructed, keeping door open \n")
+				doorTimer.Reset(doorTimeOpen)
+			} else if cab1.AnnouncementPending {
+				cab1.AnnouncementPending = false
+				cab1.AnnouncedDirection = elevio.MD_Stop
+				fmt.Printf("Changing Directions \n")
 				doorTimer.Reset(doorTimeOpen)
 			} else {
 				fmt.Printf("Door closing \n")

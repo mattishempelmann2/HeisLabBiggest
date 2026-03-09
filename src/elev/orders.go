@@ -86,12 +86,14 @@ func (e *Elevator) ClearOrderFloor() { // mulig ikke lur måte å gjøre det på
 	if clearUp && upAssigned { //Har vi ordre over og burde vi ta den basert på states
 		e.OrderListHall[e.Floor][elevio.BT_HallUp] = Order_PendingInactive
 		e.SetElevButtonLamp(elevio.BT_HallUp, e.Floor, false)
+		e.AnnouncedDirection = elevio.MD_Up
 		return
 	}
 
 	if clearDown && downAssigned { //har vi odre ned og burde vi ta den basert på states
 		e.OrderListHall[e.Floor][elevio.BT_HallDown] = Order_PendingInactive
 		e.SetElevButtonLamp(elevio.BT_HallDown, e.Floor, false)
+		e.AnnouncedDirection = elevio.MD_Down
 	}
 }
 

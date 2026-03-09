@@ -10,12 +10,14 @@ type Elevator struct {
 	CabBackupMap   map[string][]OrderStatus //nå slices så dynamisk lengde
 	AssignedOrders [][2]bool                //orders assigned by costfunk
 
-	Floor         int
-	Direction     elevio.MotorDirection
-	PrevDirection elevio.MotorDirection
-	DoorOpen      bool
-	Behaviour     string
-	Obstructed    bool
+	Floor               int
+	Direction           elevio.MotorDirection
+	PrevDirection       elevio.MotorDirection
+	AnnouncedDirection  elevio.MotorDirection
+	DoorOpen            bool
+	Behaviour           string
+	Obstructed          bool
+	AnnouncementPending bool
 
 	AliveNodes map[string]bool
 	ID         string
