@@ -39,7 +39,8 @@ type ElevatorStatus struct { //det som sendes, health checks
 type OrderStatus int
 
 const (
-	Order_Inactive = 0 // bruker int, kan eventuelt bruke veldig forskjellieg verdier for å gjøre robust mot "cosmic ray bitflip"
-	Order_Pending  = 1 // UDP har vist checksum så mulig irellevant, kanskje bruke 0 til unknown siden det er default value for int?
-	Order_Active   = 2
+	Order_Inactive        = 0 // bruker int, kan eventuelt bruke veldig forskjellieg verdier for å gjøre robust mot "cosmic ray bitflip"
+	Order_Pending         = 1 // UDP har vist checksum så mulig irellevant, kanskje bruke 0 til unknown siden det er default value for int?
+	Order_Active          = 2
+	Order_PendingInactive = 4 // må ha dette eller timestamps
 )

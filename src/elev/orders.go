@@ -71,7 +71,7 @@ func (e *Elevator) ClearOrderFloor() { // mulig ikke lur måte å gjøre det på
 		dir = e.PrevDirection
 	}
 
-	clearUp := (dir == elevio.MD_Up) || (dir == elevio.MD_Down && !e.HasOrderBelow()) || (dir == elevio.MD_Stop && e.HasOrderAbove()) //utfør ordre opp om vi var på tur opp/ned men ingen flere ned/ i ro og skal opp
+	clearUp := (dir == elevio.MD_Up) || (dir == elevio.MD_Down && !e.HasOrderBelow()) || (dir == elevio.MD_Stop && e.HasOrderAbove()) //utfør ordre opp om vi var på tur opp/ ned men ingen flere ned/ i ro og skal opp
 	clearDown := (dir == elevio.MD_Down) || (dir == elevio.MD_Up && !e.HasOrderAbove()) || (dir == elevio.MD_Stop && e.HasOrderBelow() && !clearUp)
 
 	if dir == elevio.MD_Stop && !clearDown && !clearUp { //edge case ved init, hvor noen kommer inn fra hall, ikke trykket cab order enda.
@@ -83,14 +83,14 @@ func (e *Elevator) ClearOrderFloor() { // mulig ikke lur måte å gjøre det på
 
 	}
 
-	if clearUp && upAssigned {
-		e.OrderListHall[e.Floor][elevio.BT_HallUp] = Order_Inactive
+	if clearUp && upAssigned { //Har vi ordre over og burde vi ta den basert på states
+		e.OrderListHall[e.Floor][elevio.BT_HallUp] = Order_PendingInactive
 		e.SetElevButtonLamp(elevio.BT_HallUp, e.Floor, false)
 		return
 	}
 
-	if clearDown && downAssigned {
-		e.OrderListHall[e.Floor][elevio.BT_HallDown] = Order_Inactive
+	if clearDown && downAssigned { //har vi odre ned og burde vi ta den basert på states
+		e.OrderListHall[e.Floor][elevio.BT_HallDown] = Order_PendingInactive
 		e.SetElevButtonLamp(elevio.BT_HallDown, e.Floor, false)
 	}
 }

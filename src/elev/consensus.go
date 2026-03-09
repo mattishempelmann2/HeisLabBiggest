@@ -4,18 +4,39 @@ import (
 	"heis/src/elevio"
 )
 
-func (e *Elevator) SteinSaksPapir(Node ElevatorStatus) { //Utfører steinsakspapir algebra
+func (e *Elevator) SteinSaksPapir(Node ElevatorStatus, OtherNodes map[string]ElevatorStatus) { //Utfører steinsakspapir algebra
 	for f := 0; f < elevio.NumFloors; f++ {
 		for b := 0; b < 2; b++ {
 			switch {
-			case (e.OrderListHall[f][b] == Order_Inactive) && (Node.OrderListHall[f][b] == Order_Pending): // var inaktiv, får pending fra annen node = pending
+			case (e.OrderListHall[f][b] == Order_Inactive) && (Node.OrderListHall[f][b] == Order_Pending): // Inaktiv -> Pending
 				e.OrderListHall[f][b] = Order_Pending
+			case (e.OrderListHall[f][b] == Order_Inactive) && Node.OrderListHall[f][b] == Order_Active: // Inaktiv ->aktiv, skal bare skje ved nettverksbrudd
+				e.OrderListHall[f][b] = Order_Active
+				e.SetElevButtonLamp(elevio.ButtonType(b), f, true)
 			case (e.OrderListHall[f][b] == Order_Pending) && ((Node.OrderListHall[f][b] == Order_Pending) || (Node.OrderListHall[f][b] == Order_Active)): // Ordre er pending, får enten pending eller aktiv fra annen node -> aktiv
 				e.OrderListHall[f][b] = Order_Active
 				e.SetElevButtonLamp(elevio.ButtonType(b), f, true) // noe av det dummeste jeg har sett, caste i som er en int til buttontype som er en int
-			case (e.OrderListHall[f][b] == Order_Active) && (Node.OrderListHall[f][b] == Order_Inactive): // Ordre er aktiv, blir utført annen node->satt inaktiv der = inaktiv her
-				e.OrderListHall[f][b] = Order_Inactive
-				e.SetElevButtonLamp(elevio.ButtonType(b), f, false)
+			case (e.OrderListHall[f][b] == Order_Active) && (Node.OrderListHall[f][b] == Order_PendingInactive): //Aktiv her, har blitt utført annet sted, gjør klar til å sette utført
+				e.OrderListHall[f][b] = Order_PendingInactive
+			case (e.OrderListHall[f][b] == Order_PendingInactive) && Node.OrderListHall[f][b] == Order_Pending:
+				e.OrderListHall[f][b] = Order_Pending
+			case (e.OrderListHall[f][b] == Order_PendingInactive || e.OrderListHall[f][b] == Order_Inactive) && (Node.OrderListHall[f][b] == Order_PendingInactive || Node.OrderListHall[f][b] == Order_Inactive): // Ordre er aktiv, blir utført annen node->satt inaktiv der = inaktiv her
+				if e.OrderListHall[f][b] == Order_PendingInactive {
+					ClearConsensus := true
+					for id, otherNodeStatus := range OtherNodes {
+						if e.AliveNodes[id] { // Denne checken trengs egentlig ikke da Othernodes i seg selv er en slags AliveNodes, menmen kanskje det trengs down the line
+							state := otherNodeStatus.OrderListHall[f][b]
+							if state != Order_Inactive && state != Order_PendingInactive {
+								ClearConsensus = false
+								break
+							}
+						}
+					}
+					if ClearConsensus {
+						e.OrderListHall[f][b] = Order_Inactive
+						e.SetElevButtonLamp(elevio.ButtonType(b), f, false)
+					}
+				}
 			default: // legge til noe her? Usikker hva default case burde være
 				continue
 			}

@@ -120,14 +120,14 @@ func main() {
 				runCost = true //beregn på nytt, har fått ny node i systemet
 			}
 
-			cab1.CabBackupFunc(msg)  // back up cab orders fra melding mottat
-			cab1.SteinSaksPapir(msg) // hvis ikke egen eller gammel melding, gjør steinsakspapir algebra
+			cab1.CabBackupFunc(msg)              // back up cab orders fra melding mottat
+			cab1.SteinSaksPapir(msg, OtherNodes) // hvis ikke egen eller gammel melding, gjør steinsakspapir algebra
 
 			stateChanged := (!elev.HallOrdersEqual(msg.OrderListHall, OtherNodes[msg.SenderID].OrderListHall)) || !elev.CabOrdersEqual(msg.OrderListCab, OtherNodes[msg.SenderID].OrderListCab) // Sjekk om state changed, sparer print og beregning
 			OtherNodes[msg.SenderID] = msg                                                                                                                                                      //ta vare på siste msg
 
 			if stateChanged { // kun print/gjør beregning ved endring, slipper spam
-				//PrintOrderMatrix(msg)
+				PrintOrderMatrix(msg)
 				runCost = true
 			}
 		case <-watchdogTicker.C:
@@ -171,6 +171,8 @@ func PrintOrderMatrix(e elev.ElevatorStatus) {
 				fmt.Printf("[%s] ", "X")
 			case e.OrderListHall[f][b] == elev.Order_Pending:
 				fmt.Printf("[%s] ", "P")
+			case e.OrderListHall[f][b] == elev.Order_PendingInactive:
+				fmt.Printf("[%s] ", "C")
 			default:
 				fmt.Printf("[%s] ", " ")
 			}

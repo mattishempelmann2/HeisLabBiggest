@@ -15,9 +15,10 @@ var dirMap = map[int]string{
 }
 
 var OrderBoolMap = map[elev.OrderStatus]bool{
-	elev.Order_Inactive: false,
-	elev.Order_Pending:  false,
-	elev.Order_Active:   true,
+	elev.Order_Inactive:        false,
+	elev.Order_Pending:         false,
+	elev.Order_PendingInactive: false,
+	elev.Order_Active:          true,
 }
 
 type HRAElevState struct {
