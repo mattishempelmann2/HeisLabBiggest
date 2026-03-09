@@ -25,8 +25,8 @@ func main() {
 
 	localID := flag.Int("port", 15657, "UDP port")
 	flag.Parse()
-	StatusTx := make(chan elev.ElevatorStatus) //channel med status
-	StatusRx := make(chan elev.ElevatorStatus)
+	StatusTx := make(chan elevio.ElevatorStatus) //channel med status
+	StatusRx := make(chan elevio.ElevatorStatus)
 
 	go bcast.Transmitter(20013, StatusTx) //idk hvilken port som er korrekt
 	go bcast.Receiver(20013, StatusRx)
