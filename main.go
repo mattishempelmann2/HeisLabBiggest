@@ -21,6 +21,9 @@ func main() {
 	doorTimer := time.NewTimer(doorTimeOpen) //må startes/resetes manuelt
 	doorTimer.Stop()                         // Timer starter når definert, stoppe så den ikke fucker opp states
 
+	lastFloorChangeTime := time.Now()
+	motorWatchdog := time.NewTicker(1 * time.Second)
+
 	sendTicker := time.NewTicker(10 * time.Millisecond) // ticker = går av periodically forever, hvor ofte sender vi status
 
 	localID := flag.Int("port", 15657, "UDP PORT") // bruke noe
@@ -68,7 +71,15 @@ func main() {
 			runCost = true
 		case a := <-drv_floors: //etasjeupdate
 			elevio.SetFloorIndicator(a)
-			cab1.UpdateFloor(a)
+			if a != cab1.Floor {
+				cab1.UpdateFloor(a)
+				lastFloorChangeTime = time.Now()
+				if cab1.Stuck {
+					cab1.Stuck = false
+					fmt.Printf("Motor drive recovered \n")
+				}
+			}
+
 			if !cab1.DoorOpen {
 				cab1.ExecuteOrder2() // denne åpner dør
 
@@ -100,6 +111,10 @@ func main() {
 			runCost = true
 
 		case <-sendTicker.C: //Periodisk statusupdate
+			if cab1.Stuck {
+				continue
+			}
+
 			cabBackUpCopy := make(map[string][]elev.OrderStatus)
 
 			for nodeID, cabOrders := range cab1.CabBackupMap { //tar deep copy, denne kjører fullstendig i denne casen, gjør at programm ikke kræsjer ved sending samtidig som knappetrykk
@@ -153,6 +168,21 @@ func main() {
 					runCost = true         // beregn på nytt
 				}
 			}
+		case <-motorWatchdog.C:
+			movingButStuck := (cab1.Direction != elevio.MD_Stop) && (time.Since(lastFloorChangeTime) > 5*time.Second)
+			doorStuck := cab1.Obstructed && cab1.DoorOpen && (time.Since(lastFloorChangeTime) > 10*time.Second)
+
+			if (movingButStuck || doorStuck) && !cab1.Stuck {
+				fmt.Printf("Cab is stuck (motor: %v, door: %v) \n", movingButStuck, doorStuck)
+				cab1.Stuck = true
+				cab1.SetElevMotorDirection(elevio.MD_Stop)
+			}
+
+			if cab1.Stuck && !cab1.DoorOpen {
+				lastFloorChangeTime = time.Now()
+				cab1.ExecuteOrder2()
+			}
+
 		case obstruction := <-drv_obstr: //Obstruksjonsbryter
 			cab1.Obstructed = obstruction
 			fmt.Printf("Obstruction: %v \n", cab1.Obstructed)

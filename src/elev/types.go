@@ -18,6 +18,7 @@ type Elevator struct {
 	Behaviour           string
 	Obstructed          bool
 	AnnouncementPending bool
+	Stuck               bool
 
 	AliveNodes map[string]bool
 	ID         string

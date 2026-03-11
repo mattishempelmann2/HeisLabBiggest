@@ -42,6 +42,7 @@ func (e *Elevator) CabInit(ID string, numFloors int) {
 	e.ID = ID
 	e.MsgCount = 0
 	e.Obstructed = false
+	e.Stuck = false
 }
 
 func (e *Elevator) UpdateBehaviour() {
