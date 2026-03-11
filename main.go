@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	cost "heis/src/cost_func"
 	"heis/src/elev"
@@ -22,7 +23,8 @@ func main() {
 
 	sendTicker := time.NewTicker(10 * time.Millisecond) // ticker = går av periodically forever, hvor ofte sender vi status
 
-	localID := 15657 // bruke noe
+	localID := flag.Int("port", 15657, "UDP PORT") // bruke noe
+	flag.Parse()
 
 	StatusTx := make(chan elev.ElevatorStatus) //channel med status
 	StatusRx := make(chan elev.ElevatorStatus)
@@ -31,7 +33,7 @@ func main() {
 	go bcast.Receiver(20013, StatusRx)
 
 	const NumFloors = 4
-	address := fmt.Sprintf("localhost:%d", localID) //slipper å manuelt skrive inn argument til init
+	address := fmt.Sprintf("localhost:%d", *localID) //slipper å manuelt skrive inn argument til init
 	elevio.Init(address, NumFloors)
 
 	cab1 := &elev.Elevator{}
