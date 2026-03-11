@@ -71,18 +71,15 @@ func main() {
 			runCost = true
 		case a := <-drv_floors: //etasjeupdate
 			elevio.SetFloorIndicator(a)
-			if a != cab1.Floor {
-				cab1.UpdateFloor(a)
-				lastFloorChangeTime = time.Now()
-				if cab1.Stuck {
-					cab1.Stuck = false
-					fmt.Printf("Motor drive recovered \n")
-				}
+			cab1.UpdateFloor(a)
+			lastFloorChangeTime = time.Now()
+			if cab1.Stuck {
+				cab1.Stuck = false
+				fmt.Printf("Motor drive recovered \n")
 			}
 
 			if !cab1.DoorOpen {
 				cab1.ExecuteOrder2() // denne åpner dør
-
 				if cab1.DoorOpen {
 					fmt.Printf("Door opening \n")
 					doorTimer.Reset(doorTimeOpen)
@@ -103,6 +100,11 @@ func main() {
 				fmt.Printf("Door closing \n")
 				cab1.DoorOpen = false
 				cab1.SetElevDoorOpenLamp(false)
+
+				if cab1.Stuck {
+					cab1.Stuck = false // Hvis ikke forblir vi stuck etter at vi har fjernet obstruction, da starter vi aldri å sende igjen
+				}
+
 				cab1.ExecuteOrder2()
 				if cab1.DoorOpen {
 					doorTimer.Reset(doorTimeOpen) // Viktig siden, hvis vi har cab order til 0.etasje etter reboot, blir vi stuck uten, da dører åpnes uten å resete timer
@@ -169,6 +171,10 @@ func main() {
 				}
 			}
 		case <-motorWatchdog.C:
+			if cab1.Direction == elevio.MD_Stop && !cab1.DoorOpen {
+				lastFloorChangeTime = time.Now()
+			}
+
 			movingButStuck := (cab1.Direction != elevio.MD_Stop) && (time.Since(lastFloorChangeTime) > 5*time.Second)
 			doorStuck := cab1.Obstructed && cab1.DoorOpen && (time.Since(lastFloorChangeTime) > 10*time.Second)
 
