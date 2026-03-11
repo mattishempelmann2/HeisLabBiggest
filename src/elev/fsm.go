@@ -77,3 +77,13 @@ func (e *Elevator) ExecuteOrder2() {
 	nextDir := e.ChooseDirection()
 	e.SetElevMotorDirection(nextDir)
 }
+
+func (e *Elevator) RunningAlone() bool{
+	for id := range e.AliveNodes{
+		if e.AliveNodes[id]{
+			return false
+
+		}
+	}
+	return true
+}

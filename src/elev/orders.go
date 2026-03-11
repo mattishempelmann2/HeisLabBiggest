@@ -1,8 +1,20 @@
 package elev
 
-import "heis/src/elevio"
+import (
+	"heis/src/elevio"
+)
 
 func (e *Elevator) UpdateElevatorOrder(btn elevio.ButtonEvent) {
+	if e.RunningAlone() {
+		if btn.Button < 2 {
+			e.OrderListHall[btn.Floor][btn.Button] = Order_Active
+		} else {
+			e.OrderListCab[btn.Floor] = Order_Active
+			e.SetElevButtonLamp(elevio.ButtonType(2), btn.Floor, true)
+		}
+		return
+	}
+
 	if btn.Button < 2 {
 		e.OrderListHall[btn.Floor][btn.Button] = Order_Pending
 	} else {
