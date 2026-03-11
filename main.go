@@ -3,74 +3,50 @@ package main
 import (
 	"fmt"
 	cost "heis/src/cost_func"
+	"heis/src/elev"
 	"heis/src/elevio"
 	"heis/src/network/bcast"
 	"time"
 )
 
-func PrintOrderMatrix(e elevio.ElevatorStatus) {
-	fmt.Printf("   %s  %s  %s\n", "Up", "Dn", "Cab") // Header (Optional)
-	for f := 0; f < 4; f++ {
-		fmt.Printf("F%d ", f)
-		for b := 0; b < 2; b++ {
-			switch {
-			case e.OrderListHall[f][b] == elevio.Order_Active:
-				fmt.Printf("[%s] ", "X")
-			case e.OrderListHall[f][b] == elevio.Order_Pending:
-				fmt.Printf("[%s] ", "P")
-			default:
-				fmt.Printf("[%s] ", " ")
-			}
-		}
-		switch {
-		case e.OrderListCab[f] == elevio.Order_Active:
-			fmt.Printf("[%s] ", "X")
-		case e.OrderListCab[f] == elevio.Order_Pending:
-			fmt.Printf("[%s] ", "P")
-		default:
-			fmt.Printf("[%s] ", " ")
-		}
-		fmt.Printf("\n")
-	}
-	fmt.Printf("msgID: %d, from NodeID: %s \n", e.MsgID, e.SenderID)
-}
-
 func main() {
-	OtherNodes := make(map[string]elevio.ElevatorStatus)     //denne gis til costfunc
-	lastSeen := make(map[string]time.Time)                   //map for å notere når node_x sist sett
+	OtherNodes := make(map[string]elev.ElevatorStatus) //denne gis til costfunc
+	lastSeen := make(map[string]time.Time)             //map for å notere når node_x sist sett
+
 	watchdogTicker := time.NewTicker(500 * time.Millisecond) //sjekk 2 gang i sekund om node død
 	nodeTimeout := 3 * time.Second                           // juster om vi må
 
+	doorTimeOpen := 3 * time.Second
+	doorTimer := time.NewTimer(doorTimeOpen) //må startes/resetes manuelt
+	doorTimer.Stop()                         // Timer starter når definert, stoppe så den ikke fucker opp states
+
+	sendTicker := time.NewTicker(10 * time.Millisecond) // ticker = går av periodically forever, hvor ofte sender vi status
+
 	localID := 15657 // bruke noe
 
-	StatusTx := make(chan elevio.ElevatorStatus) //channel med status
-	StatusRx := make(chan elevio.ElevatorStatus)
+	StatusTx := make(chan elev.ElevatorStatus) //channel med status
+	StatusRx := make(chan elev.ElevatorStatus)
 
 	go bcast.Transmitter(20013, StatusTx) //idk hvilken port som er korrekt
 	go bcast.Receiver(20013, StatusRx)
-
-	sendTicker := time.NewTicker(10 * time.Millisecond) // ticker = går av periodically forever, hvor ofte sender vi status
 
 	const NumFloors = 4
 	address := fmt.Sprintf("localhost:%d", localID) //slipper å manuelt skrive inn argument til init
 	elevio.Init(address, NumFloors)
 
-	cab1 := &elevio.Elevator{}
-	cab1.CabInit(address) //Init func
+	cab1 := &elev.Elevator{}
+	cab1.CabInit(address, NumFloors) //Init func
 
 	drv_buttons := make(chan elevio.ButtonEvent)
 	drv_floors := make(chan int)
 	drv_obstr := make(chan bool)
 	drv_stop := make(chan bool)
-	BtnPress := make(chan bool)
+	BtnPress := make(chan bool, 1) //buffered channel to prevent deadlocks
 
 	go elevio.PollButtons(drv_buttons)
-	go cab1.PollFloorSensor(drv_floors, BtnPress)
+	go elevio.PollFloorSensor(drv_floors, BtnPress, cab1.ActiveOrders)
 	go elevio.PollObstructionSwitch(drv_obstr)
 	go elevio.PollStopButton(drv_stop)
-
-	doorTimer := time.NewTimer(3 * time.Second) //må startes/resetes manuelt
-	doorTimer.Stop()                            // Timer starter når definert, stoppe så den ikke fucker opp states
 
 	for {
 		runCost := false
@@ -79,16 +55,24 @@ func main() {
 		case a := <-drv_buttons: //knappetrykk
 			cab1.UpdateElevatorOrder(a)
 			BtnPress <- true
+
+			if a.Button == elevio.BT_Cab && cab1.DoorOpen {
+				goingWrongWay := (cab1.AnnouncedDirection == elevio.MD_Up && a.Floor < cab1.Floor) || (cab1.AnnouncedDirection == elevio.MD_Down && a.Floor > cab1.Floor)
+				if goingWrongWay {
+					cab1.AnnouncementPending = true
+				}
+			}
+
 			runCost = true
 		case a := <-drv_floors: //etasjeupdate
-			cab1.SetFloorIndicator(a)
+			elevio.SetFloorIndicator(a)
 			cab1.UpdateFloor(a)
 			if !cab1.DoorOpen {
 				cab1.ExecuteOrder2() // denne åpner dør
 
 				if cab1.DoorOpen {
 					fmt.Printf("Door opening \n")
-					doorTimer.Reset(3 * time.Second)
+					doorTimer.Reset(doorTimeOpen)
 				}
 			}
 			runCost = true
@@ -96,26 +80,33 @@ func main() {
 		case <-doorTimer.C: //timer etter dør åpen
 			if cab1.Obstructed {
 				fmt.Printf("Cab obstructed, keeping door open \n")
-				doorTimer.Reset(3 * time.Second)
+				doorTimer.Reset(doorTimeOpen)
+			} else if cab1.AnnouncementPending {
+				cab1.AnnouncementPending = false
+				cab1.AnnouncedDirection = elevio.MD_Stop
+				fmt.Printf("Changing Directions \n")
+				doorTimer.Reset(doorTimeOpen)
 			} else {
 				fmt.Printf("Door closing \n")
 				cab1.DoorOpen = false
-				cab1.SetDoorOpenLamp(false)
+				cab1.SetElevDoorOpenLamp(false)
 				cab1.ExecuteOrder2()
 				if cab1.DoorOpen {
-					doorTimer.Reset(3 * time.Second) // Viktig siden, hvis vi har cab order til 0.etasje etter reboot, blir vi stuck uten, da dører åpnes uten å resete timer
+					doorTimer.Reset(doorTimeOpen) // Viktig siden, hvis vi har cab order til 0.etasje etter reboot, blir vi stuck uten, da dører åpnes uten å resete timer
 				}
 			}
 			runCost = true
 
 		case <-sendTicker.C: //Periodisk statusupdate
-			cabBackUpCopy := make(map[string][4]elevio.OrderStatus)
+			cabBackUpCopy := make(map[string][]elev.OrderStatus)
 
-			for key, value := range cab1.CabBackupMap { //tar deep copy, denne kjører fullstendig i denne casen, gjør at programm ikke kræsjer ved sending samtidig som knappetrykk
-				cabBackUpCopy[key] = value
+			for nodeID, cabOrders := range cab1.CabBackupMap { //tar deep copy, denne kjører fullstendig i denne casen, gjør at programm ikke kræsjer ved sending samtidig som knappetrykk
+				cabOrdersCopy := make([]elev.OrderStatus, len(cabOrders)) //lager ny liste med same lengde
+				copy(cabOrdersCopy, cabOrders)                            //kopierer over verdier
+				cabBackUpCopy[nodeID] = cabOrdersCopy                     //Fyller inn i mapet vi laget for å sende
 			}
 
-			msg := elevio.ElevatorStatus{ //Lager statusmelding
+			msg := elev.ElevatorStatus{ //Lager statusmelding
 				SenderID:      address,
 				CurrentFloor:  cab1.Floor,
 				Direction:     int(cab1.Direction),
@@ -130,7 +121,7 @@ func main() {
 			cab1.MsgCount++
 
 		case msg := <-StatusRx: //Mottar status update
-			if (msg.SenderID == address) || msg.MsgID < OtherNodes[msg.SenderID].MsgID {
+			if (msg.SenderID == address) || msg.MsgID <= OtherNodes[msg.SenderID].MsgID {
 				continue
 			}
 
@@ -142,14 +133,13 @@ func main() {
 				runCost = true //beregn på nytt, har fått ny node i systemet
 			}
 
-			cab1.CabBackupFunc(msg)  // back up cab orders fra melding mottat
-			cab1.SteinSaksPapir(msg) // hvis ikke egen eller gammel melding, gjør steinsakspapir algebra
-
-			stateChanged := (msg.OrderListHall != OtherNodes[msg.SenderID].OrderListHall) || (msg.OrderListCab != OtherNodes[msg.SenderID].OrderListCab) // Sjekk om state changed, sparer print og beregning
-			OtherNodes[msg.SenderID] = msg                                                                                                               //ta vare på siste msg
+			stateChanged := (!elev.HallOrdersEqual(msg.OrderListHall, OtherNodes[msg.SenderID].OrderListHall)) || !elev.CabOrdersEqual(msg.OrderListCab, OtherNodes[msg.SenderID].OrderListCab) // Sjekk om state changed, sparer print og beregning
+			OtherNodes[msg.SenderID] = msg
+			cab1.CabBackupFunc(msg)              // back up cab orders fra melding mottat
+			cab1.SteinSaksPapir(msg, OtherNodes) // hvis ikke egen eller gammel melding, gjør steinsakspapir algebra                                                                                                                                     //ta vare på siste msg
 
 			if stateChanged { // kun print/gjør beregning ved endring, slipper spam
-				//PrintOrderMatrix(msg)
+				PrintOrderMatrix(msg)
 				runCost = true
 			}
 		case <-watchdogTicker.C:
@@ -172,13 +162,45 @@ func main() {
 			fmt.Printf("%+v\n", a)
 			for f := 0; f < NumFloors; f++ {
 				for b := elevio.ButtonType(0); b < 3; b++ {
-					cab1.SetButtonLamp(b, f, false)
+					cab1.SetElevButtonLamp(b, f, false)
 				}
 			}
 		}
 		if runCost {
-			cab1.AssignedOrders = cost.CostFunc(cost.MakeHRAInput(*cab1, OtherNodes))[address]
+			result := cost.CostFunc(cost.MakeHRAInput(*cab1, OtherNodes))[address]
+			if result != nil {
+				cab1.AssignedOrders = result
+			}
 			cab1.UpdateHallLights() // synkroniserer hall lights
 		}
 	}
+}
+
+func PrintOrderMatrix(e elev.ElevatorStatus) {
+	fmt.Printf("   %s  %s  %s\n", "Up", "Dn", "Cab") // Header (Optional)
+	for f := 0; f < 4; f++ {
+		fmt.Printf("F%d ", f)
+		for b := 0; b < 2; b++ {
+			switch {
+			case e.OrderListHall[f][b] == elev.Order_Active:
+				fmt.Printf("[%s] ", "X")
+			case e.OrderListHall[f][b] == elev.Order_Pending:
+				fmt.Printf("[%s] ", "P")
+			case e.OrderListHall[f][b] == elev.Order_PendingInactive:
+				fmt.Printf("[%s] ", "C")
+			default:
+				fmt.Printf("[%s] ", " ")
+			}
+		}
+		switch {
+		case e.OrderListCab[f] == elev.Order_Active:
+			fmt.Printf("[%s] ", "X")
+		case e.OrderListCab[f] == elev.Order_Pending:
+			fmt.Printf("[%s] ", "P")
+		default:
+			fmt.Printf("[%s] ", " ")
+		}
+		fmt.Printf("\n")
+	}
+	fmt.Printf("msgID: %d, from NodeID: %s \n", e.MsgID, e.SenderID)
 }
