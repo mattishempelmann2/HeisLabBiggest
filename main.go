@@ -193,7 +193,7 @@ func main() {
 			cab1.Obstructed = obstruction
 			fmt.Printf("Obstruction: %v \n", cab1.Obstructed)
 			if !obstruction && cab1.DoorOpen {
-				doorTimer.Reset(3 * time.Second)
+				doorTimer.Reset(doorTimeOpen)
 			}
 
 		case a := <-drv_stop: //stop bryter

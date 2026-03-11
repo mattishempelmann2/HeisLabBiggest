@@ -4,7 +4,7 @@ import (
 	"heis/src/elevio"
 )
 
-type Elevator struct {
+type Elevator struct { //split opp i mindre structs
 	OrderListHall  [][]OrderStatus
 	OrderListCab   []OrderStatus
 	CabBackupMap   map[string][]OrderStatus //nå slices så dynamisk lengde
