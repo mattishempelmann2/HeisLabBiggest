@@ -111,10 +111,10 @@ func CostFunc(input HRAInput) map[string][][2]bool {
 		fmt.Println("json.Unmarshal error: ", err)
 		return nil
 	}
-	return *output
-
-	/*fmt.Printf("output: \n")
+	fmt.Printf("output: \n")
 	for k, v := range *output {
 		fmt.Printf("%6v :  %+v\n", k, v)
-	}*/
+	}
+	return *output
+
 }

@@ -70,13 +70,15 @@ func main() {
 
 			runCost = true
 		case a := <-drv_floors: //etasjeupdate
+			if a != cab1.Floor {
+				lastFloorChangeTime = time.Now()
+				if cab1.Stuck {
+					cab1.Stuck = false
+					fmt.Printf("Motor drive recovered \n")
+				}
+			}
 			elevio.SetFloorIndicator(a)
 			cab1.UpdateFloor(a)
-			lastFloorChangeTime = time.Now()
-			if cab1.Stuck {
-				cab1.Stuck = false
-				fmt.Printf("Motor drive recovered \n")
-			}
 
 			if !cab1.DoorOpen {
 				cab1.ExecuteOrder2() // denne åpner dør
@@ -140,7 +142,7 @@ func main() {
 			cab1.MsgCount++
 
 		case msg := <-StatusRx: //Mottar status update
-			if (msg.SenderID == address) || msg.MsgID <= OtherNodes[msg.SenderID].MsgID {
+			if (msg.SenderID == address) || msg.MsgID <= OtherNodes[msg.SenderID].MsgID || cab1.Stuck {
 				continue
 			}
 
