@@ -177,7 +177,7 @@ func main() {
 				}
 			}
 		case <-motorWatchdog.C:
-			if cab1.Direction == elevio.MD_Stop && !cab1.DoorOpen {
+			if cab1.Direction == elevio.MD_Stop {
 				lastFloorChangeTime = time.Now()
 			}
 
