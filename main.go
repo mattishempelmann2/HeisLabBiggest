@@ -199,11 +199,10 @@ func main() {
 			}
 
 		case a := <-drv_stop: //stop bryter
-			fmt.Printf("%+v\n", a)
-			for f := 0; f < NumFloors; f++ {
-				for b := elevio.ButtonType(0); b < 3; b++ {
-					cab1.SetElevButtonLamp(b, f, false)
-				}
+			if a {
+				elevio.SetStopLamp(true)
+				cab1.CabInit(address, NumFloors)
+				elevio.SetStopLamp(false) //Init func
 			}
 		}
 		if runCost {
