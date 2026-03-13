@@ -21,6 +21,10 @@ func main() {
 	doorTimer := time.NewTimer(doorTimeOpen) //må startes/resetes manuelt
 	doorTimer.Stop()                         // Timer starter når definert, stoppe så den ikke fucker opp states
 
+	doorTimeObstructed := 8 * time.Second
+	doorObstructedTimer := time.NewTimer(doorTimeObstructed)
+	doorObstructedTimer.Stop()
+
 	lastFloorChangeTime := time.Now()
 	motorWatchdog := time.NewTicker(1 * time.Second)
 
@@ -178,7 +182,7 @@ func main() {
 			}
 
 			movingButStuck := (cab1.Direction != elevio.MD_Stop) && (time.Since(lastFloorChangeTime) > 5*time.Second)
-			doorStuck := cab1.Obstructed && cab1.DoorOpen && (time.Since(lastFloorChangeTime) > 8*time.Second)
+			doorStuck := cab1.Obstructed && cab1.DoorOpen && doorObstructedTimer.Stop()
 
 			if (movingButStuck || doorStuck) && !cab1.Stuck {
 				fmt.Printf("Cab is stuck (motor: %v, door: %v) \n", movingButStuck, doorStuck)
@@ -194,8 +198,10 @@ func main() {
 		case obstruction := <-drv_obstr: //Obstruksjonsbryter
 			cab1.Obstructed = obstruction
 			fmt.Printf("Obstruction: %v \n", cab1.Obstructed)
+			doorObstructedTimer.Reset(doorTimeObstructed)
 			if !obstruction && cab1.DoorOpen {
 				doorTimer.Reset(doorTimeOpen)
+				doorObstructedTimer.Stop()
 			}
 
 		case a := <-drv_stop: //stop bryter
