@@ -188,7 +188,7 @@ func main() {
 				lastFloorChangeTime = time.Now()
 			}
 
-			movingButStuck := (elevator.Direction != elevio.MD_Stop) && (time.Since(lastFloorChangeTime) > 5*time.Second)
+			movingButStuck := (elevator.Direction != elevio.MD_Stop) && (time.Since(lastFloorChangeTime) > 3500*time.Millisecond)
 
 			if movingButStuck && !elevator.Stuck {
 				fmt.Printf("Motor is stuck\n")
