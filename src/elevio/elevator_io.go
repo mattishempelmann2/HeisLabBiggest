@@ -75,27 +75,27 @@ func SetStopLamp(value bool) {
 }
 
 func PollButtons(receiver chan<- ButtonEvent) {
-	prev := make([][3]bool, _numFloors)
+	prevButtonState := make([][3]bool, _numFloors)
 	for {
 		time.Sleep(_pollRate)
-		for f := 0; f < _numFloors; f++ {
-			for b := ButtonType(0); b < 3; b++ {
-				v := GetButton(b, f)
-				if v != prev[f][b] && v != false {
-					receiver <- ButtonEvent{f, ButtonType(b)}
+		for floor := 0; floor < _numFloors; floor++ {
+			for button := ButtonType(0); button < 3; button++ {
+				pressed := GetButton(button, floor) //Evt bytte til isPressed?
+				if pressed != prevButtonState[floor][button] && pressed != false {
+					receiver <- ButtonEvent{floor, ButtonType(button)}
 				}
-				prev[f][b] = v
+				prevButtonState[floor][button] = pressed
 			}
 		}
 	}
 }
 
 func PollFloorSensor(receiver chan<- int, btnPress <-chan bool, hasActiveOrders func() bool) {
-	prev := -1
+	prevFloorState := -1 //Eller lastFloor
 	for {
 
 		time.Sleep(_pollRate)
-		v := GetFloor()
+		currentFloor := GetFloor() //Er dette et greit navn?
 
 		buttonPressed := false
 
@@ -106,59 +106,59 @@ func PollFloorSensor(receiver chan<- int, btnPress <-chan bool, hasActiveOrders 
 			buttonPressed = false
 		}
 
-		if (v != prev && v != -1) || (v != -1 && buttonPressed) || (hasActiveOrders() && v != -1) { //denne fyrer hvert 20ms når aktive ordre, prøvd å fjerne men det ødela absolutt alt annet
-			receiver <- v
+		if (currentFloor != prevFloorState && currentFloor != -1) || (currentFloor != -1 && buttonPressed) || (hasActiveOrders() && currentFloor != -1) { //denne fyrer hvert 20ms når aktive ordre, prøvd å fjerne men det ødela absolutt alt annet
+			receiver <- currentFloor
 		}
-		prev = v
+		prevFloorState = currentFloor
 	}
 }
 
 func PollStopButton(receiver chan<- bool) {
-	prev := false
+	prevStopState := false
 	for {
 		time.Sleep(_pollRate)
-		v := GetStop()
-		if v != prev {
-			receiver <- v
+		stopPressed := GetStop()
+		if stopPressed != prevStopState {
+			receiver <- stopPressed
 		}
-		prev = v
+		prevStopState = stopPressed
 	}
 }
 
 func PollObstructionSwitch(receiver chan<- bool) {
-	prev := false
+	prevObstructionState := false
 	for {
 		time.Sleep(_pollRate)
-		v := GetObstruction()
-		if v != prev {
-			receiver <- v
+		obstructionActiv := GetObstruction()
+		if obstructionActiv != prevObstructionState {
+			receiver <- obstructionActiv
 		}
-		prev = v
+		prevObstructionState = obstructionActiv
 	}
 }
 
 func GetButton(button ButtonType, floor int) bool {
-	a := read([4]byte{6, byte(button), byte(floor), 0})
-	return toBool(a[1])
+	response := read([4]byte{6, byte(button), byte(floor), 0})
+	return toBool(response[1])
 }
 
 func GetFloor() int {
-	a := read([4]byte{7, 0, 0, 0})
-	if a[1] != 0 {
-		return int(a[2])
+	response := read([4]byte{7, 0, 0, 0})
+	if response[1] != 0 {
+		return int(response[2])
 	} else {
 		return -1
 	}
 }
 
 func GetStop() bool {
-	a := read([4]byte{8, 0, 0, 0})
-	return toBool(a[1])
+	response := read([4]byte{8, 0, 0, 0})
+	return toBool(response[1])
 }
 
 func GetObstruction() bool {
-	a := read([4]byte{9, 0, 0, 0})
-	return toBool(a[1])
+	response := read([4]byte{9, 0, 0, 0})
+	return toBool(response[1])
 }
 
 func read(in [4]byte) [4]byte {
@@ -189,18 +189,30 @@ func write(in [4]byte) {
 	}
 }
 
-func toByte(a bool) byte {
-	var b byte = 0
-	if a {
-		b = 1
+func toByte(value bool) byte {
+	var result byte = 0
+	if value {
+		result = 1
 	}
-	return b
+	return result
 }
 
-func toBool(a byte) bool {
-	var b bool = false
-	if a != 0 {
-		b = true
+func toBool(value byte) bool {
+	var result bool = false
+	if value != 0 {
+		result = true
 	}
-	return b
+	return result
 }
+
+//Tror dette skal fungere like bra, og er litt lettere å lese
+//func toByte(value bool) byte {  
+//	if value {   
+//		return 1  
+//	}  
+//	return 0
+//}  
+//
+//func toBool(value byte) bool {  
+//	return value != 0 
+//}

@@ -4,7 +4,7 @@ import (
 	"heis/src/elevio"
 )
 
-func (e *Elevator) UpdateElevatorOrder(btn elevio.ButtonEvent) {
+func (e *Elevator) UpdateElevatorOrder(btn elevio.ButtonEvent) { //endre btn? bare vi bruker button i resten, men da blir det button.Button
 	if e.RunningAlone() {
 		if btn.Button < 2 {
 			e.OrderListHall[btn.Floor][btn.Button] = Order_Active
@@ -23,9 +23,9 @@ func (e *Elevator) UpdateElevatorOrder(btn elevio.ButtonEvent) {
 }
 
 func (e *Elevator) HasOrderAbove() bool {
-	for f := e.Floor + 1; f < elevio.NumFloors; f++ {
-		for b := 0; b < 2; b++ {
-			if e.AssignedOrders[f][b] || (e.OrderListCab[f] == Order_Active) {
+	for floor := e.Floor + 1; floor < elevio.NumFloors; floor++ {
+		for button := 0; button < 2; button++ {
+			if e.AssignedOrders[floor][button] || (e.OrderListCab[floor] == Order_Active) {
 				return true
 			}
 		}
@@ -35,9 +35,9 @@ func (e *Elevator) HasOrderAbove() bool {
 }
 
 func (e *Elevator) HasOrderBelow() bool {
-	for f := e.Floor - 1; f >= 0; f-- {
-		for b := 0; b < 2; b++ {
-			if e.AssignedOrders[f][b] || (e.OrderListCab[f] == Order_Active) {
+	for floor := e.Floor - 1; floor >= 0; floor-- {
+		for button := 0; button < 2; button++ {
+			if e.AssignedOrders[floor][button] || (e.OrderListCab[floor] == Order_Active) {
 				return true
 			}
 		}
@@ -47,8 +47,8 @@ func (e *Elevator) HasOrderBelow() bool {
 }
 
 func (e *Elevator) FloorOrder() bool {
-	for b := 0; b < 2; b++ {
-		if e.AssignedOrders[e.Floor][b] {
+	for button := 0; button < 2; button++ {
+		if e.AssignedOrders[e.Floor][button] {
 			return true
 		}
 	}
@@ -59,9 +59,9 @@ func (e *Elevator) FloorOrder() bool {
 }
 
 func (e *Elevator) ActiveOrders() bool { //needed for PollFloorSensor
-	for f := 0; f < elevio.NumFloors; f++ {
-		for b := 0; b < 2; b++ {
-			if e.AssignedOrders[f][b] || (e.OrderListCab[f] == Order_Active) {
+	for floor := 0; floor < elevio.NumFloors; floor++ {
+		for button := 0; button < 2; button++ {
+			if e.AssignedOrders[floor][button] || (e.OrderListCab[floor] == Order_Active) {
 				return true
 			}
 		}
@@ -110,12 +110,12 @@ func (e *Elevator) ClearOrderFloor() { // mulig ikke lur måte å gjøre det på
 }
 
 func (e *Elevator) UpdateHallLights() {
-	for f := 0; f < elevio.NumFloors; f++ {
-		for b := 0; b < 2; b++ {
-			if e.OrderListHall[f][b] == Order_Active {
-				e.SetElevButtonLamp(elevio.ButtonType(b), f, true) // holder lys up to date
+	for floor := 0; floor < elevio.NumFloors; floor++ {
+		for button := 0; button < 2; button++ {
+			if e.OrderListHall[floor][button] == Order_Active {
+				e.SetElevButtonLamp(elevio.ButtonType(button), floor, true) // holder lys up to date
 			} else {
-				e.SetElevButtonLamp(elevio.ButtonType(b), f, false) // skrur av lys etter reset, dersom ordre tatt av annen heis i mellomtiden
+				e.SetElevButtonLamp(elevio.ButtonType(button), floor, false) // skrur av lys etter reset, dersom ordre tatt av annen heis i mellomtiden
 			}
 
 		}
@@ -126,12 +126,12 @@ func HallOrdersEqual(list1 [][]OrderStatus, list2 [][]OrderStatus) bool {
 	if len(list1) != len(list2) {
 		return false
 	}
-	for f := range list1 {
-		if len(list1[f]) != len(list2[f]) {
+	for floor := range list1 {
+		if len(list1[floor]) != len(list2[floor]) {
 			return false
 		}
-		for b := range list1[f] {
-			if list1[f][b] != list2[f][b] {
+		for button := range list1[floor] {
+			if list1[floor][button] != list2[floor][button] {
 				return false
 			}
 		}
@@ -143,8 +143,8 @@ func CabOrdersEqual(list1 []OrderStatus, list2 []OrderStatus) bool {
 	if len(list1) != len(list2) {
 		return false
 	}
-	for f := range list1 {
-		if list1[f] != list2[f] {
+	for floor := range list1 {
+		if list1[floor] != list2[floor] {
 			return false
 		}
 	}

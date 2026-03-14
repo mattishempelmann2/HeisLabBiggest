@@ -52,7 +52,7 @@ func (e *Elevator) ShouldStop() bool {
 	if e.OrderListCab[e.Floor] == Order_Active {
 		return true
 	}
-	dir := e.Direction
+	dir := e.Direction //Forkortelse, skrive helt ut?
 	if dir == elevio.MD_Stop {
 		dir = e.PrevDirection
 	}
