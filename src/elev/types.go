@@ -4,7 +4,7 @@ import (
 	"heis/src/elevio"
 )
 
-type Elevator struct { //split opp i mindre structs
+type Elevator struct { //split opp i mindre structs, interne lokale tilstander
 	OrderListHall  [][]OrderStatus
 	OrderListCab   []OrderStatus
 	CabBackupMap   map[string][]OrderStatus //nå slices så dynamisk lengde
@@ -25,7 +25,7 @@ type Elevator struct { //split opp i mindre structs
 	MsgCount   int
 }
 
-type ElevatorStatus struct { //det som sendes, health checks
+type ElevatorStatus struct { //det som sendes ut, health checks
 	SenderID     string
 	CurrentFloor int
 	Direction    int
@@ -36,7 +36,7 @@ type ElevatorStatus struct { //det som sendes, health checks
 	OrderListCab  []OrderStatus //slices, dynamisk lengde
 	CabBackupMap  map[string][]OrderStatus
 
-	MsgID int //For å holde styr på rekkefølge, forkaste gamle meldinger
+	MsgID int //for å holde styr på rekkefølge, forkaste gamle meldinger
 }
 
 type OrderStatus int
