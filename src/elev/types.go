@@ -4,12 +4,14 @@ import (
 	"heis/src/elevio"
 )
 
-type Elevator struct { //split opp i mindre structs, interne lokale tilstander
-	OrderListHall  [][]OrderStatus
-	OrderListCab   []OrderStatus
-	CabBackupMap   map[string][]OrderStatus //nå slices så dynamisk lengde
-	AssignedOrders [][2]bool                //orders assigned by costfunk
+type Orders struct {
+	ListHall  [][]OrderStatus
+	ListCab   []OrderStatus
+	CabBackupList   map[string][]OrderStatus 
+	Assigned [][2]bool               
+}
 
+type State struct {
 	Floor               int
 	Direction           elevio.MotorDirection
 	PrevDirection       elevio.MotorDirection
@@ -19,13 +21,21 @@ type Elevator struct { //split opp i mindre structs, interne lokale tilstander
 	Obstructed          bool
 	AnnouncementPending bool
 	Stuck               bool
-
-	AliveNodes map[string]bool
-	ID         string
-	MsgCount   int
 }
 
-type ElevatorStatus struct { //det som sendes ut, health checks
+type OtherNodes struct {
+	Alive map[string]bool
+	ID         string
+	MessageCount   int
+}
+
+type Elevator struct { 
+	Orders Orders
+	State State
+	OtherNodes OtherNodes
+}
+
+type ElevatorMessage struct { 
 	SenderID     string
 	CurrentFloor int
 	Direction    int
@@ -33,10 +43,9 @@ type ElevatorStatus struct { //det som sendes ut, health checks
 	Behaviour    string
 
 	OrderListHall [][]OrderStatus
-	OrderListCab  []OrderStatus //slices, dynamisk lengde
+	OrderListCab  []OrderStatus 
 	CabBackupMap  map[string][]OrderStatus
-
-	MsgID int //for å holde styr på rekkefølge, forkaste gamle meldinger
+	MessageID int 
 }
 
 type OrderStatus int

@@ -35,23 +35,23 @@ type HRAInput struct {
 
 func makeHRAElevState(Node any) HRAElevState {
 	elevState := &HRAElevState{}
-	switch Nodetype := Node.(type) {
+	switch nodetype := Node.(type) {
 	case elev.Elevator:
-		elevState.Behavior = Nodetype.Behaviour
-		elevState.Floor = Nodetype.Floor
-		elevState.Direction = dirMap[int(Nodetype.Direction)]
-		elevState.CabRequests = make([]bool, len(Nodetype.OrderListCab))
-		for floor := 0; floor < len(Nodetype.OrderListCab); floor++ {
-			elevState.CabRequests[floor] = OrderBoolMap[Nodetype.OrderListCab[floor]]
+		elevState.Behavior = nodetype.State.Behaviour
+		elevState.Floor = nodetype.State.Floor
+		elevState.Direction = dirMap[int(nodetype.State.Direction)]
+		elevState.CabRequests = make([]bool, len(nodetype.Orders.ListCab))
+		for floor := 0; floor < len(nodetype.Orders.ListCab); floor++ {
+			elevState.CabRequests[floor] = OrderBoolMap[nodetype.Orders.ListCab[floor]]
 		}
 
-	case elev.ElevatorStatus:
-		elevState.Behavior = Nodetype.Behaviour
-		elevState.Floor = Nodetype.CurrentFloor
-		elevState.Direction = dirMap[int(Nodetype.Direction)]
-		elevState.CabRequests = make([]bool, len(Nodetype.OrderListCab))
-		for floor := 0; floor < len(Nodetype.OrderListCab); floor++ {
-			elevState.CabRequests[floor] = OrderBoolMap[Nodetype.OrderListCab[floor]]
+	case elev.ElevatorMessage:
+		elevState.Behavior = nodetype.Behaviour
+		elevState.Floor = nodetype.CurrentFloor
+		elevState.Direction = dirMap[int(nodetype.Direction)]
+		elevState.CabRequests = make([]bool, len(nodetype.OrderListCab))
+		for floor := 0; floor < len(nodetype.OrderListCab); floor++ {
+			elevState.CabRequests[floor] = OrderBoolMap[nodetype.OrderListCab[floor]]
 		}
 	default:
 		fmt.Printf("Unsupported Node type")
@@ -59,18 +59,18 @@ func makeHRAElevState(Node any) HRAElevState {
 	return *elevState
 }
 
-func MakeHRAInput(localNode elev.Elevator, otherNodes map[string]elev.ElevatorStatus) HRAInput {
+func MakeHRAInput(localNode elev.Elevator, otherNodes map[string]elev.ElevatorMessage) HRAInput {
 	HRAInput := &HRAInput{}
 	HRAInput.States = make(map[string]HRAElevState)
-	HRAInput.HallRequests = make([][2]bool, len(localNode.OrderListHall))
+	HRAInput.HallRequests = make([][2]bool, len(localNode.Orders.ListHall))
 
-	for floor := 0; floor < len(localNode.OrderListHall); floor++ {
+	for floor := 0; floor < len(localNode.Orders.ListHall); floor++ {
 		for button := 0; button < 2; button++ {
-			HRAInput.HallRequests[floor][button] = OrderBoolMap[localNode.OrderListHall[floor][button]]
+			HRAInput.HallRequests[floor][button] = OrderBoolMap[localNode.Orders.ListHall[floor][button]]
 		}
 	}
 
-	HRAInput.States[localNode.ID] = makeHRAElevState(localNode)
+	HRAInput.States[localNode.OtherNodes.ID] = makeHRAElevState(localNode)
 	for id, status := range otherNodes {
 		HRAInput.States[id] = makeHRAElevState(status)
 	}

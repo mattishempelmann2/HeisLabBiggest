@@ -6,14 +6,14 @@ import (
 
 func (e *Elevator) StoppFloor() {
 	e.SetElevMotorDirection(0)
-	e.DoorOpen = true
+	e.State.DoorOpen = true
 	e.SetElevDoorOpenLamp(true)
 	e.ClearOrderFloor()
 
 }
 
 func (e *Elevator) ChooseDirection() elevio.MotorDirection {
-	switch e.Direction {
+	switch e.State.Direction {
 	case elevio.MD_Up:
 		if e.HasOrderAbove() {
 			return elevio.MD_Up
@@ -29,7 +29,7 @@ func (e *Elevator) ChooseDirection() elevio.MotorDirection {
 		}
 		return elevio.MD_Stop
 	case elevio.MD_Stop:
-		if e.PrevDirection == elevio.MD_Down {
+		if e.State.PrevDirection == elevio.MD_Down {
 			if e.HasOrderBelow() {
 				return elevio.MD_Down
 			} else if e.HasOrderAbove() {
@@ -49,22 +49,22 @@ func (e *Elevator) ChooseDirection() elevio.MotorDirection {
 }
 
 func (e *Elevator) ShouldStop() bool {
-	if e.OrderListCab[e.Floor] == Order_Active {
+	if e.Orders.ListCab[e.State.Floor] == Order_Active {
 		return true
 	}
-	dir := e.Direction //Forkortelse, skrive helt ut?
+	dir := e.State.Direction //Forkortelse, skrive helt ut?
 	if dir == elevio.MD_Stop {
-		dir = e.PrevDirection
+		dir = e.State.PrevDirection
 	}
 	switch dir {
 	case elevio.MD_Up:
-		return e.AssignedOrders[e.Floor][elevio.BT_HallUp] || (!e.HasOrderAbove() && e.AssignedOrders[e.Floor][elevio.BT_HallDown])
+		return e.Orders.Assigned[e.State.Floor][elevio.BT_HallUp] || (!e.HasOrderAbove() && e.Orders.Assigned[e.State.Floor][elevio.BT_HallDown])
 
 	case elevio.MD_Down:
-		return e.AssignedOrders[e.Floor][elevio.BT_HallDown] || (!e.HasOrderBelow() && e.AssignedOrders[e.Floor][elevio.BT_HallUp])
+		return e.Orders.Assigned[e.State.Floor][elevio.BT_HallDown] || (!e.HasOrderBelow() && e.Orders.Assigned[e.State.Floor][elevio.BT_HallUp])
 
 	default:
-		return e.AssignedOrders[e.Floor][elevio.BT_HallDown] || e.AssignedOrders[e.Floor][elevio.BT_HallUp]
+		return e.Orders.Assigned[e.State.Floor][elevio.BT_HallDown] || e.Orders.Assigned[e.State.Floor][elevio.BT_HallUp]
 	}
 
 }
@@ -78,9 +78,9 @@ func (e *Elevator) ExecuteOrder2() {
 	e.SetElevMotorDirection(nextDir)
 }
 
-func (e *Elevator) RunningAlone() bool{
-	for id := range e.AliveNodes{
-		if e.AliveNodes[id]{
+func (e *Elevator) RunningAlone() bool {
+	for id := range e.OtherNodes.Alive {
+		if e.OtherNodes.Alive[id] {
 			return false
 
 		}
