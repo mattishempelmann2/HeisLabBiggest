@@ -15,7 +15,7 @@ func main() {
 	lastSeen := make(map[string]time.Time)             //map for å notere når node_x sist sett
 
 	watchdogTicker := time.NewTicker(500 * time.Millisecond) //sjekk 2 gang i sekund om node død
-	nodeTimeout := 3 * time.Second                           // juster om vi må
+	nodeTimeout := 4 * time.Second                           // juster om vi må
 
 	doorTimeOpen := 3 * time.Second
 	doorTimer := time.NewTimer(doorTimeOpen) //må startes/resetes manuelt
