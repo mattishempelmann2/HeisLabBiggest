@@ -21,8 +21,8 @@ func main() {
 	doorTimer := time.NewTimer(doorTimeOpen) //må startes/resetes manuelt
 	doorTimer.Stop()                         // Timer starter når definert, stoppe så den ikke fucker opp states
 
-	ObstructionLimit := 8 * time.Second
-	doorObstructedTimer := time.NewTimer(ObstructionLimit)
+	obstructionLimit := 8 * time.Second
+	doorObstructedTimer := time.NewTimer(obstructionLimit)
 	doorObstructedTimer.Stop()
 
 	lastFloorChangeTime := time.Now()
@@ -30,11 +30,11 @@ func main() {
 
 	sendTicker := time.NewTicker(10 * time.Millisecond) // ticker = går av periodically forever, hvor ofte sender vi status
 
-	localID := flag.Int("port", 15657, "UDP PORT") // bruke noe 
+	localID := flag.Int("port", 15657, "UDP PORT") // bruke noe
 	flag.Parse()
 
 	networkStatusOut := make(chan elev.ElevatorStatus) //channel med status, Lokale??
-	networkStatusIn := make(chan elev.ElevatorStatus) //Lokale??
+	networkStatusIn := make(chan elev.ElevatorStatus)  //Lokale??
 
 	go bcast.Transmitter(20013, networkStatusOut) //idk hvilken port som er korrekt
 	go bcast.Receiver(20013, networkStatusIn)
@@ -184,7 +184,7 @@ func main() {
 			}
 
 		case <-motorWatchdog.C:
-			if elevator.Direction == elevio.MD_Stop && !elevator.DoorOpen {
+			if elevator.Direction == elevio.MD_Stop {
 				lastFloorChangeTime = time.Now()
 			}
 
@@ -204,7 +204,7 @@ func main() {
 		case obstruction := <-obstructionEvents: //Obstruksjonsbryter
 			elevator.Obstructed = obstruction
 			fmt.Printf("Obstruction: %v \n", elevator.Obstructed)
-			doorObstructedTimer.Reset(ObstructionLimit)
+			doorObstructedTimer.Reset(obstructionLimit)
 			if !obstruction && elevator.DoorOpen {
 				doorTimer.Reset(doorTimeOpen)
 				doorObstructedTimer.Stop()
