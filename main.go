@@ -64,13 +64,7 @@ func main() {
 		case buttonEvent := <-buttonEvents: //knappetrykk
 			elevator.UpdateElevatorOrder(buttonEvent)
 			buttonPressCh <- true
-
-			if buttonEvent.Button == elevio.BT_Cab && elevator.State.DoorOpen {
-				goingWrongWay := (elevator.State.AnnouncedDirection == elevio.MD_Up && buttonEvent.Floor < elevator.State.Floor) || (elevator.State.AnnouncedDirection == elevio.MD_Down && buttonEvent.Floor > elevator.State.Floor)
-				if goingWrongWay {
-					elevator.State.AnnouncementPending = true
-				}
-			}
+			elevator.GoingWrongway(&buttonEvent)
 
 			runCost = true
 		case newFloor := <-floorEvents: //etasjeupdate
@@ -94,57 +88,14 @@ func main() {
 			runCost = true
 
 		case <-doorTimer.C: //timer etter dør åpen
-			if elevator.State.Obstructed {
-				fmt.Printf("Cab obstructed, keeping door open \n")
-				doorTimer.Reset(doorTimeOpen)
-			} else if elevator.State.AnnouncementPending {
-				elevator.State.AnnouncementPending = false
-				elevator.State.AnnouncedDirection = elevio.MD_Stop
-				fmt.Printf("Changing Directions \n")
-				doorTimer.Reset(doorTimeOpen)
-			} else {
-				fmt.Printf("Door closing \n")
-				elevator.State.DoorOpen = false
-				elevator.SetElevDoorOpenLamp(false)
-
-				if elevator.State.Stuck {
-					elevator.State.Stuck = false // Hvis ikke forblir vi stuck etter at vi har fjernet obstruction, da starter vi aldri å sende igjen
-				}
-
-				elevator.ExecuteOrder2()
-				if elevator.State.DoorOpen {
-					doorTimer.Reset(doorTimeOpen) // Viktig siden, hvis vi har cab order til 0.etasje etter reboot, blir vi stuck uten, da dører åpnes uten å resete timer
-				}
-			}
+			elevator.DoorTimeHandler(doorTimer, doorTimeOpen)
 			runCost = true
 
 		case <-sendTicker.C: //Periodisk statusupdate
 			if elevator.State.Stuck {
 				continue
 			}
-
-			cabBackUpCopy := make(map[string][]elev.OrderStatus)
-
-			for nodeID, cabOrders := range elevator.Orders.CabBackupList { //tar deep copy, denne kjører fullstendig i denne casen, gjør at programm ikke kræsjer ved sending samtidig som knappetrykk
-				cabOrdersCopy := make([]elev.OrderStatus, len(cabOrders)) //lager ny liste med same lengde
-				copy(cabOrdersCopy, cabOrders)                            //kopierer over verdier
-				cabBackUpCopy[nodeID] = cabOrdersCopy                     //Fyller inn i mapet vi laget for å sende
-			}
-
-			msg := elev.ElevatorMessage{ //Lager statusmelding
-				SenderID:      address,
-				CurrentFloor:  elevator.State.Floor,
-				Direction:     int(elevator.State.Direction),
-				OrderListHall: elevator.Orders.ListHall,
-				OrderListCab:  elevator.Orders.ListCab,
-				CabBackupMap:  cabBackUpCopy,
-				MessageID:     elevator.OtherNodes.MessageCount,
-				DoorOpen:      elevator.State.DoorOpen, //bruke counter som MsgID
-				Behaviour:     elevator.State.Behaviour,
-			}
-			networkStatusOut <- msg //sende
-			elevator.OtherNodes.MessageCount++
-
+			elevator.SendStatus(address, networkStatusOut)
 		case msg := <-networkStatusIn: //Mottar status update
 			if (msg.SenderID == address) || msg.MessageID <= otherNodes[msg.SenderID].MessageID || elevator.State.Stuck {
 				continue
@@ -158,7 +109,8 @@ func main() {
 				runCost = true //beregn på nytt, har fått ny node i systemet
 			}
 
-			stateChanged := (!elev.HallOrdersEqual(msg.OrderListHall, otherNodes[msg.SenderID].OrderListHall)) || !elev.CabOrdersEqual(msg.OrderListCab, otherNodes[msg.SenderID].OrderListCab) // Sjekk om state changed, sparer print og beregning
+			stateChanged := elevator.StateChanged(msg, otherNodes)
+
 			otherNodes[msg.SenderID] = msg
 			elevator.CabBackupFunc(msg)              // back up cab orders fra melding mottat
 			elevator.SteinSaksPapir(msg, otherNodes) // hvis ikke egen eller gammel melding, gjør steinsakspapir algebra                                                                                                                                     //ta vare på siste msg
@@ -182,33 +134,11 @@ func main() {
 				elevator.State.Stuck = true
 				elevator.SetElevMotorDirection(elevio.MD_Stop)
 			}
-
 		case <-motorWatchdog.C:
-			if elevator.State.Direction == elevio.MD_Stop {
-				lastFloorChangeTime = time.Now()
-			}
-
-			movingButStuck := (elevator.State.Direction != elevio.MD_Stop) && (time.Since(lastFloorChangeTime) > 3500*time.Millisecond)
-
-			if movingButStuck && !elevator.State.Stuck {
-				fmt.Printf("Motor is stuck\n")
-				elevator.State.Stuck = true
-				elevator.SetElevMotorDirection(elevio.MD_Stop)
-			}
-
-			if elevator.State.Stuck && !elevator.State.DoorOpen {
-				lastFloorChangeTime = time.Now()
-				elevator.ExecuteOrder2()
-			}
+			elevator.StuckHandler(&lastFloorChangeTime)
 
 		case obstruction := <-obstructionEvents: //Obstruksjonsbryter
-			elevator.State.Obstructed = obstruction
-			fmt.Printf("Obstruction: %v \n", elevator.State.Obstructed)
-			doorObstructedTimer.Reset(obstructionLimit)
-			if !obstruction && elevator.State.DoorOpen {
-				doorTimer.Reset(doorTimeOpen)
-				doorObstructedTimer.Stop()
-			}
+			elevator.ObstructionHandler(obstruction, doorObstructedTimer, obstructionLimit, doorTimer, doorTimeOpen)
 
 		case stopPressed := <-stopEvents: //stop bryter
 			if stopPressed {

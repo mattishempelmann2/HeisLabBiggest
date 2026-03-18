@@ -78,7 +78,7 @@ func (e *Elevator) ClearOrderFloor() { // mulig ikke lur måte å gjøre det på
 	upAssigned := e.Orders.ListHall[e.State.Floor][elevio.BT_HallUp] == Order_Active && e.Orders.Assigned[e.State.Floor][elevio.BT_HallUp]       //Har vi hall ordre oppover
 	downAssigned := e.Orders.ListHall[e.State.Floor][elevio.BT_HallDown] == Order_Active && e.Orders.Assigned[e.State.Floor][elevio.BT_HallDown] // Har vi hall ordre nedover
 
-	dir := e.State.Direction         //hva er retning
+	dir := e.State.Direction   //hva er retning
 	if dir == elevio.MD_Stop { // hvis vi står i ro hvordan kom vi hit.
 		dir = e.State.PrevDirection
 	}
@@ -116,7 +116,7 @@ func (e *Elevator) UpdateHallLights() {
 				e.SetElevButtonLamp(elevio.ButtonType(button), floor, true) // holder lys up to date
 			} else {
 				e.SetElevButtonLamp(elevio.ButtonType(button), floor, false) // skrur av lys etter reset, dersom ordre tatt av annen heis i mellomtiden
-			}			
+			}
 		}
 	}
 }

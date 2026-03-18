@@ -1,7 +1,9 @@
 package elev
 
 import (
+	"fmt"
 	"heis/src/elevio"
+	"time"
 )
 
 func (e *Elevator) StoppFloor() {
@@ -86,4 +88,65 @@ func (e *Elevator) RunningAlone() bool {
 		}
 	}
 	return true
+}
+
+func (e *Elevator) GoingWrongway(event *elevio.ButtonEvent) {
+	if event.Button == elevio.BT_Cab && e.State.DoorOpen {
+		e.State.AnnouncementPending = (e.State.AnnouncedDirection == elevio.MD_Up && event.Floor < e.State.Floor) || (e.State.AnnouncedDirection == elevio.MD_Down && event.Floor > e.State.Floor)
+	}
+}
+
+func (e *Elevator) DoorTimeHandler(doorTimer *time.Timer, time time.Duration) {
+	if e.State.Obstructed {
+		fmt.Printf("Cab obstructed, keeping door open \n")
+		doorTimer.Reset(time)
+	} else if e.State.AnnouncementPending {
+		e.State.AnnouncementPending = false
+		e.State.AnnouncedDirection = elevio.MD_Stop
+		fmt.Printf("Changing Directions \n")
+		doorTimer.Reset(time)
+	} else {
+		fmt.Printf("Door closing \n")
+		e.State.DoorOpen = false
+		e.SetElevDoorOpenLamp(false)
+
+		if e.State.Stuck {
+			e.State.Stuck = false // Hvis ikke forblir vi stuck etter at vi har fjernet obstruction, da starter vi aldri å sende igjen
+		}
+
+		e.ExecuteOrder2()
+		if e.State.DoorOpen {
+			doorTimer.Reset(time) // Viktig siden, hvis vi har cab order til 0.etasje etter reboot, blir vi stuck uten, da dører åpnes uten å resete timer
+		}
+	}
+}
+
+func (e *Elevator) StateChanged(msg ElevatorMessage, otherNodes map[string]ElevatorMessage) bool {
+	return (!HallOrdersEqual(msg.OrderListHall, otherNodes[msg.SenderID].OrderListHall)) || !CabOrdersEqual(msg.OrderListCab, otherNodes[msg.SenderID].OrderListCab) // Sjekk om state changed, sparer print og beregning
+}
+
+func (e *Elevator) StuckHandler(lastFloorChangeTime *time.Time) {
+	if e.State.Direction == elevio.MD_Stop {
+		*lastFloorChangeTime = time.Now()
+	}
+	movingButStuck := (e.State.Direction != elevio.MD_Stop) && (time.Since(*lastFloorChangeTime) > 3500*time.Millisecond)
+	if movingButStuck && !e.State.Stuck {
+		fmt.Printf("Motor is stuck\n")
+		e.State.Stuck = true
+		e.SetElevMotorDirection(elevio.MD_Stop)
+	}
+	if e.State.Stuck && !e.State.DoorOpen {
+		*lastFloorChangeTime = time.Now()
+		e.ExecuteOrder2()
+	}
+}
+
+func (e *Elevator) ObstructionHandler(obstruction bool, doorObstructedTimer *time.Timer, obstructionLimit time.Duration, doorTimer *time.Timer, doorTimeOpen time.Duration) {
+	e.State.Obstructed = obstruction
+	fmt.Printf("Obstruction: %v \n", e.State.Obstructed)
+	doorObstructedTimer.Reset(obstructionLimit)
+	if !obstruction && e.State.DoorOpen {
+		doorTimer.Reset(doorTimeOpen)
+		doorObstructedTimer.Stop()
+	}
 }

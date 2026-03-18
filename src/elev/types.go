@@ -5,10 +5,10 @@ import (
 )
 
 type Orders struct {
-	ListHall  [][]OrderStatus
-	ListCab   []OrderStatus
-	CabBackupList   map[string][]OrderStatus 
-	Assigned [][2]bool               
+	ListHall      [][]OrderStatus
+	ListCab       []OrderStatus
+	CabBackupList map[string][]OrderStatus
+	Assigned      [][2]bool
 }
 
 type State struct {
@@ -24,18 +24,18 @@ type State struct {
 }
 
 type OtherNodes struct {
-	Alive map[string]bool
-	ID         string
-	MessageCount   int
+	Alive        map[string]bool
+	ID           string
+	MessageCount int
 }
 
-type Elevator struct { 
-	Orders Orders
-	State State
+type Elevator struct {
+	Orders     Orders
+	State      State
 	OtherNodes OtherNodes
 }
 
-type ElevatorMessage struct { 
+type ElevatorMessage struct {
 	SenderID     string
 	CurrentFloor int
 	Direction    int
@@ -43,9 +43,9 @@ type ElevatorMessage struct {
 	Behaviour    string
 
 	OrderListHall [][]OrderStatus
-	OrderListCab  []OrderStatus 
+	OrderListCab  []OrderStatus
 	CabBackupMap  map[string][]OrderStatus
-	MessageID int 
+	MessageID     int
 }
 
 type OrderStatus int

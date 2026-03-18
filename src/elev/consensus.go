@@ -26,7 +26,7 @@ func (e *Elevator) SteinSaksPapir(Node ElevatorMessage, OtherNodes map[string]El
 					ClearConsensus := true                        //Er alle Noder enige, lettere å sjekke etter en negativ, enn å telle antall positive
 					for id, otherNodeStatus := range OtherNodes { //iterer liste med status andre noder
 						if e.OtherNodes.Alive[id] { // Denne checken trengs egentlig ikke da Othernodes i seg selv er en slags Alive, menmen kanskje det trengs down the line
-							states := otherNodeStatus.OrderListHall[floor][button]                   //ordren vi sjekker
+							states := otherNodeStatus.OrderListHall[floor][button]           //ordren vi sjekker
 							if states != Order_Inactive && states != Order_PendingInactive { //hvis ikke inaktiv/PendingInaktiv på alle nodene så er vi ikke klar til å sette til inaktiv
 								ClearConsensus = false
 								break
