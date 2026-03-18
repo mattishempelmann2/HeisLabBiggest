@@ -47,28 +47,27 @@ func main() {
 	elevator := &elev.Elevator{}
 	elevator.CabInit(address, numFloors)
 
-	buttonEvents := make(chan elevio.ButtonEvent)
-	floorEvents := make(chan int)
-	obstructionEvents := make(chan bool)
-	stopEvents := make(chan bool)
+	buttonEventChan := make(chan elevio.ButtonEvent)
+	floorEvent := make(chan int)
+	obstructionEvent := make(chan bool)
+	stopEvent := make(chan bool)
 	buttonPressCh := make(chan bool, 1)
 
-	go elevio.PollButtons(buttonEvents)
-	go elevio.PollFloorSensor(floorEvents, buttonPressCh, elevator.ActiveOrders)
-	go elevio.PollObstructionSwitch(obstructionEvents)
-	go elevio.PollStopButton(stopEvents)
+	go elevio.PollButtons(buttonEventChan)
+	go elevio.PollFloorSensor(floorEvent, buttonPressCh, elevator.ActiveOrders)
+	go elevio.PollObstructionSwitch(obstructionEvent)
+	go elevio.PollStopButton(stopEvent)
 
 	for {
 		runCost := false //Flag to run cost function
 
 		select {
-		case buttonEvent := <-buttonEvents:
+		case buttonEvent := <-buttonEventChan:
 			elevator.UpdateElevatorOrder(buttonEvent)
 			buttonPressCh <- true
 			elevator.GoingWrongway(&buttonEvent)
-
 			runCost = true
-		case newFloor := <-floorEvents:
+		case newFloor := <-floorEvent:
 			if newFloor != elevator.State.Floor {
 				lastFloorChangeTime = time.Now()
 				if elevator.State.Stuck {
@@ -137,10 +136,10 @@ func main() {
 		case <-motorWatchdog.C:
 			elevator.StuckHandler(&lastFloorChangeTime)
 
-		case obstruction := <-obstructionEvents:
+		case obstruction := <-obstructionEvent:
 			elevator.ObstructionHandler(obstruction, doorObstructedTimer, obstructionLimit, doorTimer, doorTimeOpen)
 
-		case stopPressed := <-stopEvents:
+		case stopPressed := <-stopEvent:
 			if stopPressed {
 				elevio.SetStopLamp(true)
 				elevator.CabInit(address, numFloors)
