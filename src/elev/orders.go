@@ -7,25 +7,25 @@ import (
 func (e *Elevator) UpdateElevatorOrder(btn elevio.ButtonEvent) { //endre btn? bare vi bruker button i resten, men da blir det button.Button
 	if e.RunningAlone() {
 		if btn.Button < 2 {
-			e.OrderListHall[btn.Floor][btn.Button] = Order_Active
+			e.Orders.ListHall[btn.Floor][btn.Button] = Order_Active
 		} else {
-			e.OrderListCab[btn.Floor] = Order_Active
+			e.Orders.ListCab[btn.Floor] = Order_Active
 			e.SetElevButtonLamp(elevio.ButtonType(2), btn.Floor, true)
 		}
 		return
 	}
 
 	if btn.Button < 2 {
-		e.OrderListHall[btn.Floor][btn.Button] = Order_Pending
+		e.Orders.ListHall[btn.Floor][btn.Button] = Order_Pending
 	} else {
-		e.OrderListCab[btn.Floor] = Order_Pending
+		e.Orders.ListCab[btn.Floor] = Order_Pending
 	}
 }
 
 func (e *Elevator) HasOrderAbove() bool {
-	for floor := e.Floor + 1; floor < elevio.NumFloors; floor++ {
+	for floor := e.State.Floor + 1; floor < elevio.NumFloors; floor++ {
 		for button := 0; button < 2; button++ {
-			if e.AssignedOrders[floor][button] || (e.OrderListCab[floor] == Order_Active) {
+			if e.Orders.Assigned[floor][button] || (e.Orders.ListCab[floor] == Order_Active) {
 				return true
 			}
 		}
@@ -35,9 +35,9 @@ func (e *Elevator) HasOrderAbove() bool {
 }
 
 func (e *Elevator) HasOrderBelow() bool {
-	for floor := e.Floor - 1; floor >= 0; floor-- {
+	for floor := e.State.Floor - 1; floor >= 0; floor-- {
 		for button := 0; button < 2; button++ {
-			if e.AssignedOrders[floor][button] || (e.OrderListCab[floor] == Order_Active) {
+			if e.Orders.Assigned[floor][button] || (e.Orders.ListCab[floor] == Order_Active) {
 				return true
 			}
 		}
@@ -48,11 +48,11 @@ func (e *Elevator) HasOrderBelow() bool {
 
 func (e *Elevator) FloorOrder() bool {
 	for button := 0; button < 2; button++ {
-		if e.AssignedOrders[e.Floor][button] {
+		if e.Orders.Assigned[e.State.Floor][button] {
 			return true
 		}
 	}
-	if e.OrderListCab[e.Floor] == Order_Active {
+	if e.Orders.ListCab[e.State.Floor] == Order_Active {
 		return true
 	}
 	return false
@@ -61,7 +61,7 @@ func (e *Elevator) FloorOrder() bool {
 func (e *Elevator) ActiveOrders() bool { //needed for PollFloorSensor
 	for floor := 0; floor < elevio.NumFloors; floor++ {
 		for button := 0; button < 2; button++ {
-			if e.AssignedOrders[floor][button] || (e.OrderListCab[floor] == Order_Active) {
+			if e.Orders.Assigned[floor][button] || (e.Orders.ListCab[floor] == Order_Active) {
 				return true
 			}
 		}
@@ -70,17 +70,17 @@ func (e *Elevator) ActiveOrders() bool { //needed for PollFloorSensor
 }
 
 func (e *Elevator) ClearOrderFloor() { // mulig ikke lur måte å gjøre det på, rettelse funker clearer i GLOBAL hall orders slik at cost funksjon clearer lokal
-	if e.OrderListCab[e.Floor] == Order_Active { //cab orders enkelt og greit
-		e.OrderListCab[e.Floor] = Order_Inactive
-		e.SetElevButtonLamp(elevio.ButtonType(2), e.Floor, false)
+	if e.Orders.ListCab[e.State.Floor] == Order_Active { //cab orders enkelt og greit
+		e.Orders.ListCab[e.State.Floor] = Order_Inactive
+		e.SetElevButtonLamp(elevio.ButtonType(2), e.State.Floor, false)
 	}
 
-	upAssigned := e.OrderListHall[e.Floor][elevio.BT_HallUp] == Order_Active && e.AssignedOrders[e.Floor][elevio.BT_HallUp]       //Har vi hall ordre oppover
-	downAssigned := e.OrderListHall[e.Floor][elevio.BT_HallDown] == Order_Active && e.AssignedOrders[e.Floor][elevio.BT_HallDown] // Har vi hall ordre nedover
+	upAssigned := e.Orders.ListHall[e.State.Floor][elevio.BT_HallUp] == Order_Active && e.Orders.Assigned[e.State.Floor][elevio.BT_HallUp]       //Har vi hall ordre oppover
+	downAssigned := e.Orders.ListHall[e.State.Floor][elevio.BT_HallDown] == Order_Active && e.Orders.Assigned[e.State.Floor][elevio.BT_HallDown] // Har vi hall ordre nedover
 
-	dir := e.Direction         //hva er retning
+	dir := e.State.Direction   //hva er retning
 	if dir == elevio.MD_Stop { // hvis vi står i ro hvordan kom vi hit.
-		dir = e.PrevDirection
+		dir = e.State.PrevDirection
 	}
 
 	clearUp := (dir == elevio.MD_Up) || (dir == elevio.MD_Down && !e.HasOrderBelow()) || (dir == elevio.MD_Stop && e.HasOrderAbove()) //utfør ordre opp om vi var på tur opp/ ned men ingen flere ned/ i ro og skal opp
@@ -95,29 +95,28 @@ func (e *Elevator) ClearOrderFloor() { // mulig ikke lur måte å gjøre det på
 
 	}
 
-	if clearUp && upAssigned { //Har vi ordre over og burde vi ta den basert på states
-		e.OrderListHall[e.Floor][elevio.BT_HallUp] = Order_PendingInactive
-		e.SetElevButtonLamp(elevio.BT_HallUp, e.Floor, false)
-		e.AnnouncedDirection = elevio.MD_Up
+	if clearUp && upAssigned { //Har vi ordre over og burde vi ta den basert på State
+		e.Orders.ListHall[e.State.Floor][elevio.BT_HallUp] = Order_PendingInactive
+		e.SetElevButtonLamp(elevio.BT_HallUp, e.State.Floor, false)
+		e.State.AnnouncedDirection = elevio.MD_Up
 		return
 	}
 
-	if clearDown && downAssigned { //har vi odre ned og burde vi ta den basert på states
-		e.OrderListHall[e.Floor][elevio.BT_HallDown] = Order_PendingInactive
-		e.SetElevButtonLamp(elevio.BT_HallDown, e.Floor, false)
-		e.AnnouncedDirection = elevio.MD_Down
+	if clearDown && downAssigned { //har vi odre ned og burde vi ta den basert på State
+		e.Orders.ListHall[e.State.Floor][elevio.BT_HallDown] = Order_PendingInactive
+		e.SetElevButtonLamp(elevio.BT_HallDown, e.State.Floor, false)
+		e.State.AnnouncedDirection = elevio.MD_Down
 	}
 }
 
 func (e *Elevator) UpdateHallLights() {
 	for floor := 0; floor < elevio.NumFloors; floor++ {
 		for button := 0; button < 2; button++ {
-			if e.OrderListHall[floor][button] == Order_Active {
+			if e.Orders.ListHall[floor][button] == Order_Active {
 				e.SetElevButtonLamp(elevio.ButtonType(button), floor, true) // holder lys up to date
 			} else {
 				e.SetElevButtonLamp(elevio.ButtonType(button), floor, false) // skrur av lys etter reset, dersom ordre tatt av annen heis i mellomtiden
 			}
-
 		}
 	}
 }
