@@ -4,30 +4,34 @@ import (
 	"heis/src/elevio"
 )
 
-func (e *Elevator) SteinSaksPapir(Node ElevatorMessage, OtherNodes map[string]ElevatorMessage) { //Utfører steinsakspapir algebra
+func (e *Elevator) HallConsensus(Node ElevatorMessage, OtherNodes map[string]ElevatorMessage) {
 	for floor := 0; floor < elevio.NumFloors; floor++ {
 		for button := 0; button < 2; button++ {
 			switch {
-			case (e.Orders.ListHall[floor][button] == Order_Inactive) && (Node.OrderListHall[floor][button] == Order_Pending): // Inaktiv -> Pending
+			case (e.Orders.ListHall[floor][button] == Order_Inactive) && (Node.OrderListHall[floor][button] == Order_Pending): // Inactive -> Pending
 				e.Orders.ListHall[floor][button] = Order_Pending
-			case (e.Orders.ListHall[floor][button] == Order_Inactive) && Node.OrderListHall[floor][button] == Order_Active: // Inaktiv ->aktiv, skal bare skje ved nettverksbrudd
-				e.Orders.ListHall[floor][button] = Order_Active
-				e.SetElevButtonLamp(elevio.ButtonType(button), floor, true)
-			case (e.Orders.ListHall[floor][button] == Order_Pending) && ((Node.OrderListHall[floor][button] == Order_Pending) || (Node.OrderListHall[floor][button] == Order_Active)): // Ordre er pending, får enten pending eller aktiv fra annen node -> aktiv
-				e.Orders.ListHall[floor][button] = Order_Active
-				e.SetElevButtonLamp(elevio.ButtonType(button), floor, true)
-			case (e.Orders.ListHall[floor][button] == Order_Active) && (Node.OrderListHall[floor][button] == Order_PendingInactive): //Aktiv her, har blitt utført annet sted, gjør klar til å sette utført
-				e.Orders.ListHall[floor][button] = Order_PendingInactive //maybe skru av lys her og
 
-			case (e.Orders.ListHall[floor][button] == Order_PendingInactive) && Node.OrderListHall[floor][button] == Order_Pending: //ordren var egt utført men ble trykket på nytt, trur ikke denne i praksis vil oppstå, pga speed
+			case (e.Orders.ListHall[floor][button] == Order_Inactive) && Node.OrderListHall[floor][button] == Order_Active: // Inactive ->active, should only happen after network loss
+				e.Orders.ListHall[floor][button] = Order_Active
+				e.SetElevButtonLamp(elevio.ButtonType(button), floor, true)
+
+			case (e.Orders.ListHall[floor][button] == Order_Pending) && ((Node.OrderListHall[floor][button] == Order_Pending) || (Node.OrderListHall[floor][button] == Order_Active)): // Order is pending, recieves either pending or active -> active
+				e.Orders.ListHall[floor][button] = Order_Active
+				e.SetElevButtonLamp(elevio.ButtonType(button), floor, true)
+
+			case (e.Orders.ListHall[floor][button] == Order_Active) && (Node.OrderListHall[floor][button] == Order_PendingInactive): //Active here, has been executed somewhere else -> pending ianactive
+				e.Orders.ListHall[floor][button] = Order_PendingInactive
+
+			case (e.Orders.ListHall[floor][button] == Order_PendingInactive) && Node.OrderListHall[floor][button] == Order_Pending: //Order was executed but was reordered
 				e.Orders.ListHall[floor][button] = Order_Pending
-			case (e.Orders.ListHall[floor][button] == Order_PendingInactive || e.Orders.ListHall[floor][button] == Order_Inactive) && (Node.OrderListHall[floor][button] == Order_PendingInactive || Node.OrderListHall[floor][button] == Order_Inactive): // inaktiv/pendingInaktiv her eller på Node
-				if e.Orders.ListHall[floor][button] == Order_PendingInactive { // Er det her den er satt til pendingInaktiv
-					ClearConsensus := true                        //Er alle Noder enige, lettere å sjekke etter en negativ, enn å telle antall positive
-					for id, otherNodeStatus := range OtherNodes { //iterer liste med status andre noder
-						if e.OtherNodes.Alive[id] { // Denne checken trengs egentlig ikke da Othernodes i seg selv er en slags Alive, menmen kanskje det trengs down the line
-							states := otherNodeStatus.OrderListHall[floor][button]           //ordren vi sjekker
-							if states != Order_Inactive && states != Order_PendingInactive { //hvis ikke inaktiv/PendingInaktiv på alle nodene så er vi ikke klar til å sette til inaktiv
+
+			case (e.Orders.ListHall[floor][button] == Order_PendingInactive || e.Orders.ListHall[floor][button] == Order_Inactive) && (Node.OrderListHall[floor][button] == Order_PendingInactive || Node.OrderListHall[floor][button] == Order_Inactive): // inactive/pendingInactive here or on external Node
+				if e.Orders.ListHall[floor][button] == Order_PendingInactive {
+					ClearConsensus := true
+					for id, otherNodeStatus := range OtherNodes {
+						if e.OtherNodes.Alive[id] {
+							states := otherNodeStatus.OrderListHall[floor][button]
+							if states != Order_Inactive && states != Order_PendingInactive { //if not in agreement, then we are not ready to set inactive.
 								ClearConsensus = false
 								break
 							}
@@ -38,23 +42,23 @@ func (e *Elevator) SteinSaksPapir(Node ElevatorMessage, OtherNodes map[string]El
 						e.SetElevButtonLamp(elevio.ButtonType(button), floor, false)
 					}
 				}
-			default: // legge til noe her? Usikker hva default case burde være
+			default:
 				continue
 			}
 		}
 	}
-	//skru på lamper cab orders, aktiver de basert på å sjekke map fra andre elev og egen orderlist
+
 	CabBackup, exists := Node.CabBackupMap[e.OtherNodes.ID]
 	if !exists {
-		CabBackup = make([]OrderStatus, elevio.NumFloors) //må manuelt lage dersom det er første gang siden en slice bare returnerer nil dersom ikke eksisterende, fast array returnerer array fyllt med 0.x
+		CabBackup = make([]OrderStatus, elevio.NumFloors)
 	}
 	for floor := 0; floor < elevio.NumFloors; floor++ {
 		switch {
 		case (e.Orders.ListCab[floor] == Order_Pending) && CabBackup[floor] == Order_Active:
 			e.Orders.ListCab[floor] = Order_Active
 			e.SetElevButtonLamp(elevio.ButtonType(2), floor, true)
-		case (e.Orders.ListCab[floor] == Order_Inactive) && CabBackup[floor] == Order_Active && e.OtherNodes.MessageCount < 100: // Hvis under 100msg sendt, første sek, oppstart, vi tillater recovery fra andre noder
-			if e.State.Floor == floor && e.State.DoorOpen { // Unngår dobbel aktivering av ordre i 0 etasje etter reboot, slipper 6 sekund dør åpning
+		case (e.Orders.ListCab[floor] == Order_Inactive) && CabBackup[floor] == Order_Active && e.OtherNodes.MessageCount < 100: //If under 100 messages sent, recovery of caborders is active.
+			if e.State.Floor == floor && e.State.DoorOpen { //Handles edge case to avoid double opening of door in floor 0 after reboot.
 				continue
 			}
 			e.Orders.ListCab[floor] = Order_Active
@@ -66,28 +70,28 @@ func (e *Elevator) SteinSaksPapir(Node ElevatorMessage, OtherNodes map[string]El
 }
 
 func (e *Elevator) CabBackupFunc(Node ElevatorMessage) {
-	CabBackup, exists := e.Orders.CabBackupList[Node.SenderID] // Henter map med caborder for NODE vi snakker med atm
+	cabBackup, exists := e.Orders.CabBackupList[Node.SenderID]
 	if !exists {
-		CabBackup = make([]OrderStatus, elevio.NumFloors)
+		cabBackup = make([]OrderStatus, elevio.NumFloors)
 	}
 
-	for floor := 0; floor < elevio.NumFloors; floor++ { // gjør endringer på map basert på map og melding fra node vi snakker med
+	for floor := 0; floor < elevio.NumFloors; floor++ {
 		incomingCabStates := Node.OrderListCab[floor]
-		currentBackupStates := CabBackup[floor]
+		currentBackupStates := cabBackup[floor]
 		switch {
 		case (currentBackupStates == Order_Inactive) && (incomingCabStates == Order_Pending):
-			CabBackup[floor] = Order_Pending
+			cabBackup[floor] = Order_Pending
 
 		case (currentBackupStates == Order_Pending) && (incomingCabStates == Order_Pending || incomingCabStates == Order_Active):
-			CabBackup[floor] = Order_Active
+			cabBackup[floor] = Order_Active
 
 		case (currentBackupStates == Order_Active) && (incomingCabStates == Order_Inactive):
-			CabBackup[floor] = Order_Inactive
+			cabBackup[floor] = Order_Inactive
 
 		default:
 			continue
 		}
 
 	}
-	e.Orders.CabBackupList[Node.SenderID] = CabBackup // skriver ny status til map
+	e.Orders.CabBackupList[Node.SenderID] = cabBackup // Writes new status to map
 }

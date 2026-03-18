@@ -11,15 +11,17 @@ import (
 )
 
 func main() {
-	otherNodes := make(map[string]elev.ElevatorMessage) //denne gis til costfunc ER ikke denne lokal? endra den til det ihvertfall
-	lastSeen := make(map[string]time.Time)              //map for å notere når node_x sist sett
+	const numFloors = 4
 
-	watchdogTicker := time.NewTicker(500 * time.Millisecond) //sjekk 2 gang i sekund om node død
-	nodeTimeout := 4 * time.Second                           // juster om vi må
+	otherNodesMap := make(map[string]elev.ElevatorMessage) //Map to store messages from other nodes
+	lastSeenMap := make(map[string]time.Time)              //Map to note when node x last seen
+
+	timeOutTicker := time.NewTicker(500 * time.Millisecond)
+	nodeTimeout := 4 * time.Second
 
 	doorTimeOpen := 3 * time.Second
-	doorTimer := time.NewTimer(doorTimeOpen) //må startes/resetes manuelt
-	doorTimer.Stop()                         // Timer starter når definert, stoppe så den ikke fucker opp State
+	doorTimer := time.NewTimer(doorTimeOpen)
+	doorTimer.Stop()
 
 	obstructionLimit := 8 * time.Second
 	doorObstructedTimer := time.NewTimer(obstructionLimit)
@@ -28,29 +30,28 @@ func main() {
 	lastFloorChangeTime := time.Now()
 	motorWatchdog := time.NewTicker(1 * time.Second)
 
-	sendTicker := time.NewTicker(10 * time.Millisecond) // ticker = går av periodically forever, hvor ofte sender vi status
+	sendTicker := time.NewTicker(10 * time.Millisecond) //Send interval
 
-	localID := flag.Int("port", 15657, "UDP PORT") // bruke noe
+	localID := flag.Int("port", 15657, "UDP PORT")
 	flag.Parse()
 
-	networkStatusOut := make(chan elev.ElevatorMessage) //channel med status, Lokale??
-	networkStatusIn := make(chan elev.ElevatorMessage)  //Lokale??
+	networkStatusOut := make(chan elev.ElevatorMessage)
+	networkStatusIn := make(chan elev.ElevatorMessage)
 
-	go bcast.Transmitter(20013, networkStatusOut) //idk hvilken port som er korrekt
+	go bcast.Transmitter(20013, networkStatusOut)
 	go bcast.Receiver(20013, networkStatusIn)
 
-	const numFloors = 4
-	address := fmt.Sprintf("localhost:%d", *localID) //slipper å manuelt skrive inn argument til init
+	address := fmt.Sprintf("localhost:%d", *localID)
 	elevio.Init(address, numFloors)
 
 	elevator := &elev.Elevator{}
-	elevator.CabInit(address, numFloors) //initsialisere med adresse og antall etasjer
+	elevator.CabInit(address, numFloors)
 
 	buttonEvents := make(chan elevio.ButtonEvent)
 	floorEvents := make(chan int)
 	obstructionEvents := make(chan bool)
 	stopEvents := make(chan bool)
-	buttonPressCh := make(chan bool, 1) //buffered channel to prevent deadlocks Lokal??
+	buttonPressCh := make(chan bool, 1)
 
 	go elevio.PollButtons(buttonEvents)
 	go elevio.PollFloorSensor(floorEvents, buttonPressCh, elevator.ActiveOrders)
@@ -58,16 +59,16 @@ func main() {
 	go elevio.PollStopButton(stopEvents)
 
 	for {
-		runCost := false
+		runCost := false //Flag to run cost function
 
 		select {
-		case buttonEvent := <-buttonEvents: //knappetrykk
+		case buttonEvent := <-buttonEvents:
 			elevator.UpdateElevatorOrder(buttonEvent)
 			buttonPressCh <- true
 			elevator.GoingWrongway(&buttonEvent)
 
 			runCost = true
-		case newFloor := <-floorEvents: //etasjeupdate
+		case newFloor := <-floorEvents:
 			if newFloor != elevator.State.Floor {
 				lastFloorChangeTime = time.Now()
 				if elevator.State.Stuck {
@@ -79,7 +80,7 @@ func main() {
 			elevator.UpdateFloor(newFloor)
 
 			if !elevator.State.DoorOpen {
-				elevator.ExecuteOrder2() // denne åpner dør
+				elevator.ExecuteOrder()
 				if elevator.State.DoorOpen {
 					fmt.Printf("Door opening \n")
 					doorTimer.Reset(doorTimeOpen)
@@ -87,45 +88,44 @@ func main() {
 			}
 			runCost = true
 
-		case <-doorTimer.C: //timer etter dør åpen
+		case <-doorTimer.C:
 			elevator.DoorTimeHandler(doorTimer, doorTimeOpen)
 			runCost = true
 
-		case <-sendTicker.C: //Periodisk statusupdate
+		case <-sendTicker.C:
 			if elevator.State.Stuck {
 				continue
 			}
 			elevator.SendStatus(address, networkStatusOut)
-		case msg := <-networkStatusIn: //Mottar status update
-			if (msg.SenderID == address) || msg.MessageID <= otherNodes[msg.SenderID].MessageID || elevator.State.Stuck {
+		case msg := <-networkStatusIn:
+			if (msg.SenderID == address) || msg.MessageID <= otherNodesMap[msg.SenderID].MessageID || elevator.State.Stuck {
 				continue
 			}
 
-			lastSeen[msg.SenderID] = time.Now()
+			lastSeenMap[msg.SenderID] = time.Now()
 
 			if !elevator.OtherNodes.Alive[msg.SenderID] {
-				elevator.OtherNodes.Alive[msg.SenderID] = true // setter true dersom den ikke er det
+				elevator.OtherNodes.Alive[msg.SenderID] = true
 				fmt.Printf("Node %s connected \n", msg.SenderID)
-				runCost = true //beregn på nytt, har fått ny node i systemet
-			}
-
-			stateChanged := elevator.StateChanged(msg, otherNodes)
-
-			otherNodes[msg.SenderID] = msg
-			elevator.CabBackupFunc(msg)              // back up cab orders fra melding mottat
-			elevator.SteinSaksPapir(msg, otherNodes) // hvis ikke egen eller gammel melding, gjør steinsakspapir algebra                                                                                                                                     //ta vare på siste msg
-
-			if stateChanged { // kun print/gjør beregning ved endring, slipper spam
-				PrintOrderMatrix(msg)
 				runCost = true
 			}
-		case <-watchdogTicker.C:
-			for id, lastTime := range lastSeen {
+
+			stateChanged := elevator.StateChanged(msg, otherNodesMap)
+
+			otherNodesMap[msg.SenderID] = msg
+			elevator.CabBackupFunc(msg)
+			elevator.HallConsensus(msg, otherNodesMap)
+
+			if stateChanged {
+				runCost = true
+			}
+		case <-timeOutTicker.C:
+			for id, lastTime := range lastSeenMap {
 				if elevator.OtherNodes.Alive[id] && time.Since(lastTime) > nodeTimeout {
-					elevator.OtherNodes.Alive[id] = false // marker som død
+					elevator.OtherNodes.Alive[id] = false
 					fmt.Printf("Watchdog: Node %s timed out! Marking as dead.\n", id)
-					delete(otherNodes, id) // fjern fra otherNodes liste cost funk bruker
-					runCost = true         // beregn på nytt
+					delete(otherNodesMap, id)
+					runCost = true
 				}
 			}
 		case <-doorObstructedTimer.C:
@@ -137,51 +137,22 @@ func main() {
 		case <-motorWatchdog.C:
 			elevator.StuckHandler(&lastFloorChangeTime)
 
-		case obstruction := <-obstructionEvents: //Obstruksjonsbryter
+		case obstruction := <-obstructionEvents:
 			elevator.ObstructionHandler(obstruction, doorObstructedTimer, obstructionLimit, doorTimer, doorTimeOpen)
 
-		case stopPressed := <-stopEvents: //stop bryter
+		case stopPressed := <-stopEvents:
 			if stopPressed {
 				elevio.SetStopLamp(true)
 				elevator.CabInit(address, numFloors)
-				elevio.SetStopLamp(false) //Init func
+				elevio.SetStopLamp(false)
 			}
 		}
 		if runCost {
-			result := cost.CostFunc(cost.MakeHRAInput(*elevator, otherNodes))[address]
+			result := cost.CostFunc(cost.MakeHRAInput(*elevator, otherNodesMap))[address]
 			if result != nil {
 				elevator.Orders.Assigned = result
 			}
-			elevator.UpdateHallLights() // synkroniserer hall lights
+			elevator.UpdateHallLights()
 		}
 	}
-}
-
-func PrintOrderMatrix(e elev.ElevatorMessage) {
-	fmt.Printf("   %s  %s  %s\n", "Up", "Dn", "Cab") // Header (Optional)
-	for floor := 0; floor < 4; floor++ {
-		fmt.Printf("F%d ", floor)
-		for button := 0; button < 2; button++ {
-			switch {
-			case e.OrderListHall[floor][button] == elev.Order_Active:
-				fmt.Printf("[%s] ", "X")
-			case e.OrderListHall[floor][button] == elev.Order_Pending:
-				fmt.Printf("[%s] ", "P")
-			case e.OrderListHall[floor][button] == elev.Order_PendingInactive:
-				fmt.Printf("[%s] ", "C")
-			default:
-				fmt.Printf("[%s] ", " ")
-			}
-		}
-		switch {
-		case e.OrderListCab[floor] == elev.Order_Active:
-			fmt.Printf("[%s] ", "X")
-		case e.OrderListCab[floor] == elev.Order_Pending:
-			fmt.Printf("[%s] ", "P")
-		default:
-			fmt.Printf("[%s] ", " ")
-		}
-		fmt.Printf("\n")
-	}
-	fmt.Printf("msgID: %d, from NodeID: %s \n", e.MessageID, e.SenderID)
 }

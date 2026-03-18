@@ -54,7 +54,7 @@ func (e *Elevator) ShouldStop() bool {
 	if e.Orders.ListCab[e.State.Floor] == Order_Active {
 		return true
 	}
-	dir := e.State.Direction //Forkortelse, skrive helt ut?
+	dir := e.State.Direction
 	if dir == elevio.MD_Stop {
 		dir = e.State.PrevDirection
 	}
@@ -71,12 +71,15 @@ func (e *Elevator) ShouldStop() bool {
 
 }
 
-func (e *Elevator) ExecuteOrder2() {
+func (e *Elevator) ExecuteOrder() {
 	if e.ShouldStop() {
 		e.StoppFloor()
 		return
 	}
 	nextDir := e.ChooseDirection()
+	if nextDir != e.State.Direction {
+		fmt.Printf("Going %s \n", dirMap[int(nextDir)])
+	}
 	e.SetElevMotorDirection(nextDir)
 }
 
@@ -84,7 +87,6 @@ func (e *Elevator) RunningAlone() bool {
 	for id := range e.OtherNodes.Alive {
 		if e.OtherNodes.Alive[id] {
 			return false
-
 		}
 	}
 	return true
@@ -111,18 +113,18 @@ func (e *Elevator) DoorTimeHandler(doorTimer *time.Timer, time time.Duration) {
 		e.SetElevDoorOpenLamp(false)
 
 		if e.State.Stuck {
-			e.State.Stuck = false // Hvis ikke forblir vi stuck etter at vi har fjernet obstruction, da starter vi aldri å sende igjen
+			e.State.Stuck = false //Go back online after obstruction is resolved.
 		}
 
-		e.ExecuteOrder2()
+		e.ExecuteOrder()
 		if e.State.DoorOpen {
-			doorTimer.Reset(time) // Viktig siden, hvis vi har cab order til 0.etasje etter reboot, blir vi stuck uten, da dører åpnes uten å resete timer
+			doorTimer.Reset(time) //Handles edge case after reboot. The elevator would not start the doortimer if not.
 		}
 	}
 }
 
 func (e *Elevator) StateChanged(msg ElevatorMessage, otherNodes map[string]ElevatorMessage) bool {
-	return (!HallOrdersEqual(msg.OrderListHall, otherNodes[msg.SenderID].OrderListHall)) || !CabOrdersEqual(msg.OrderListCab, otherNodes[msg.SenderID].OrderListCab) // Sjekk om state changed, sparer print og beregning
+	return (!HallOrdersEqual(msg.OrderListHall, otherNodes[msg.SenderID].OrderListHall)) || !CabOrdersEqual(msg.OrderListCab, otherNodes[msg.SenderID].OrderListCab)
 }
 
 func (e *Elevator) StuckHandler(lastFloorChangeTime *time.Time) {
@@ -137,7 +139,7 @@ func (e *Elevator) StuckHandler(lastFloorChangeTime *time.Time) {
 	}
 	if e.State.Stuck && !e.State.DoorOpen {
 		*lastFloorChangeTime = time.Now()
-		e.ExecuteOrder2()
+		e.ExecuteOrder()
 	}
 }
 

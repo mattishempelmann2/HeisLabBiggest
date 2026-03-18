@@ -11,9 +11,8 @@ const _pollRate = 20 * time.Millisecond
 const numButtons = 3
 
 var _initialized bool = false
-var _numFloors int = 4
-var NumFloors int = 4 //default verdi
-var topFloor int = _numFloors - 1
+var NumFloors int = 4
+var topFloor int = NumFloors - 1
 var _mtx sync.Mutex
 var _conn net.Conn
 
@@ -22,8 +21,7 @@ func Init(addr string, numFloors int) {
 		fmt.Println("Driver already initialized!")
 		return
 	}
-	_numFloors = numFloors
-	NumFloors = numFloors //global variabel
+	NumFloors = numFloors
 	_mtx = sync.Mutex{}
 	var err error
 	_conn, err = net.Dial("tcp", addr)
@@ -75,12 +73,12 @@ func SetStopLamp(value bool) {
 }
 
 func PollButtons(receiver chan<- ButtonEvent) {
-	prevButtonState := make([][3]bool, _numFloors)
+	prevButtonState := make([][3]bool, NumFloors)
 	for {
 		time.Sleep(_pollRate)
-		for floor := 0; floor < _numFloors; floor++ {
+		for floor := 0; floor < NumFloors; floor++ {
 			for button := ButtonType(0); button < 3; button++ {
-				pressed := GetButton(button, floor) //Evt bytte til isPressed?
+				pressed := GetButton(button, floor)
 				if pressed != prevButtonState[floor][button] && pressed != false {
 					receiver <- ButtonEvent{floor, ButtonType(button)}
 				}
@@ -91,11 +89,11 @@ func PollButtons(receiver chan<- ButtonEvent) {
 }
 
 func PollFloorSensor(receiver chan<- int, btnPress <-chan bool, hasActiveOrders func() bool) {
-	prevFloorState := -1 //Eller lastFloor
+	prevFloorState := -1
 	for {
 
 		time.Sleep(_pollRate)
-		currentFloor := GetFloor() //Er dette et greit navn?
+		currentFloor := GetFloor()
 
 		buttonPressed := false
 
@@ -106,7 +104,7 @@ func PollFloorSensor(receiver chan<- int, btnPress <-chan bool, hasActiveOrders 
 			buttonPressed = false
 		}
 
-		if (currentFloor != prevFloorState && currentFloor != -1) || (currentFloor != -1 && buttonPressed) || (hasActiveOrders() && currentFloor != -1) { //denne fyrer hvert 20ms når aktive ordre, prøvd å fjerne men det ødela absolutt alt annet
+		if (currentFloor != prevFloorState && currentFloor != -1) || (currentFloor != -1 && buttonPressed) || (hasActiveOrders() && currentFloor != -1) {
 			receiver <- currentFloor
 		}
 		prevFloorState = currentFloor
@@ -204,15 +202,3 @@ func toBool(value byte) bool {
 	}
 	return result
 }
-
-//Tror dette skal fungere like bra, og er litt lettere å lese
-//func toByte(value bool) byte {  
-//	if value {   
-//		return 1  
-//	}  
-//	return 0
-//}  
-//
-//func toBool(value byte) bool {  
-//	return value != 0 
-//}
