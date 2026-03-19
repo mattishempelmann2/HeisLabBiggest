@@ -1,6 +1,8 @@
 # HeisLabBiggest  
 
-## Beskrivelse  Dette prosjektet implementerer et distribuert heissystem i Go, hvor flere heiser samarbeider over nettverk ved hjelp av UDP-kommunikasjon. Systemet håndterer bestillinger, kjører heisen og fordeler ordre mellom noder.  
+## Beskrivelse  
+
+Dette prosjektet implementerer et heissystem i faget TTK4145. Sanntidssystemet er skrevt i Go. 
 
 ## Forfattere  
 * Mattis Jost Hempellman
