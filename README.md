@@ -2,7 +2,7 @@
 
 ## Beskrivelse  
 
-Dette prosjektet implementerer et heissystem i faget TTK4145. Sanntidssystemet er skrevt i Go. 
+Dette prosjektet implementerer et heissystem i faget TTK4145. Sanntidssystemet er skrevet i Go. 
 
 ## Forfattere  
 * Mattis Joost Hempelmann
