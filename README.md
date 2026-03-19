@@ -10,5 +10,5 @@ Dette prosjektet implementerer et heissystem i faget TTK4145. Sanntidssystemet e
 * Lisa Radford
   
 ## Hvordan kjøre  
-### 1. Start simulator  Åpne en terminal:  ``` cd "Sim apple silicon" ./SimElevatorServer --port 15657 ```  
-### 2. Kjør programmet  Åpne en ny terminal:  ``` go run . -port=15657 ```, Porten må være lik begge steder.  
+### 1. Start simulator  Åpne en terminal:   ```./SimElevatorServer --port 15657 ```  
+### 2. Kjør programmet  Åpne en ny terminal:  ```./heis -port 15657 ```, Porten må være lik begge steder.  
